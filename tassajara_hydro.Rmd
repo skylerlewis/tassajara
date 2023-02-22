@@ -81,7 +81,7 @@ new_years_storm_pred %>% ggplot(aes(x = stage_ft)) +
   scale_x_continuous(trans = 'log10', limits = c(1, 8), breaks = 1:8)
 ```
 
-```{r}
+```{r, fig.height = 3, fig.width = 6}
 #new_years_storm_pred %>% ggplot(aes(x = result_datetime)) + 
 #  geom_line(aes(y = streamflow_cfs_pred), color = "red") + 
 #  geom_line(aes(y = streamflow_cfs), color="black")
@@ -96,12 +96,12 @@ new_years_storm_pred %>%
                 height = rain_intensity_in/coeff, 
                 fill = 'PColor')
             ) +
-  geom_line(aes(y = streamflow_cfs_pred), color = "red") + 
-  geom_line(aes(y = streamflow_cfs), color="black") +
+  geom_area(aes(y = streamflow_cfs_pred), fill = "red", color = "red") + 
+  geom_area(aes(y = streamflow_cfs), fill = "black", color="black") +
   scale_y_continuous(name = "streamflow (cfs)",
                      limit = c(0, maxRange),
                      expand = c(0, 0),
-                     sec.axis = sec_axis(trans = ~(.-maxRange)*coeff,
+                     sec.axis = sec_axis(trans = ~(.-maxRange)*coeff, 
                                          name = "precipitation (in/hr)")) +
   scale_fill_manual(values = c('PColor' = "blue"),
                     labels = c('PColor' = 'Precipitation'),
@@ -109,11 +109,11 @@ new_years_storm_pred %>%
   scale_color_manual(values = c('black', '#e41a1c'), 
                      name = NULL) +
   guides(color = guide_legend(nrow = 1)) +
-  theme(legend.position = 'top',
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank())
+  theme(legend.position = 'top')
+
 
 ```
+
 ```{r}
 # figure out the peak flow from the December storm
 peak_flow_dec_2022 <- new_years_storm_pred %>% 
