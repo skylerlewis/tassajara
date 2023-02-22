@@ -1,6 +1,9 @@
 ---
 title: "Extrapolation of Tassajara rain gauge"
-output: html_notebook
+output:
+  github_document: default
+  html_notebook: default
+keep_md: true
 ---
 
 This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
