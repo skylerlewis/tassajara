@@ -6,33 +6,28 @@ output:
 keep_md: true
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
-
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
-
 ```{r}
 library(tidyverse)
+ggplot2::theme_set(theme_classic())
+
 ```
 
 ```{r}
-rawdata_tas <- read_csv("https://cdec.water.ca.gov/dynamicapp/req/CSVDataServlet?Stations=TAS&SensorNums=16&dur_code=E&Start=1900-01-01&End=2023-02-16")
-rawdata_tas %>% save(file = "data/rawdata_tas.Rda")
 
+if (!file.exists("data/rawdata_tas.rds")){
+  rawdata_tas <- read_csv("https://cdec.water.ca.gov/dynamicapp/req/CSVDataServlet?Stations=TAS&SensorNums=16&dur_code=E&Start=1900-01-01&End=2023-02-16")
+  rawdata_tas %>% saveRDS(file = "data/rawdata_tas.rds")
+}
+if (!file.exists("data/rawdata_mlr.rds")){
 rawdata_mlr <- read_csv("https://cdec.water.ca.gov/dynamicapp/req/CSVDataServlet?Stations=MLR&SensorNums=2&dur_code=H&Start=1900-01-01&End=2023-02-16")
-rawdata_mlr %>% save(file = "data/rawdata_mlr.Rda")
-
+rawdata_mlr %>% saveRDS(file = "data/rawdata_mlr.rds")
+}
 ```
-
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
-
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
-
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
 
 
 ```{r}
-load(file = "data/rawdata_tas.Rda")
-load(file = "data/rawdata_mlr.Rda")
+rawdata_tas <- readRDS(file = "data/rawdata_tas.rds")
+rawdata_mlr <- readRDS(file = "data/rawdata_mlr.rds")
 
 daily_data_tas <- rawdata_tas %>%
   as_tibble() %>%
@@ -67,10 +62,14 @@ daily_data_filtered <- daily_data %>%
   filter(precip_tas > 0 & precip_mlr > 0)
 
 daily_data_filtered %>% 
+  #select(c(precip_tas, precip_mlr)) %>%
+  #filter((precip_tas > 0) & (precip_mlr > 0)) %>%
+  #drop_na() %>%
   ggplot(aes(y = precip_tas, x = precip_mlr)) +
     geom_point() +
     scale_y_log10() +
-    scale_x_log10()
+    scale_x_log10() + 
+    geom_smooth(method="lm")
 
 model <- lm(log(daily_data_filtered$precip_tas) ~ log(daily_data_filtered$precip_mlr))
 summary(model)
@@ -83,10 +82,36 @@ daily_data_pred <- daily_data %>%
     TRUE ~ 0
     ))
 
-daily_data_pred %>% ggplot(aes(y = precip_tas_pred, x = date)) + geom_col() + theme_classic()
+daily_data_pred %>% ggplot(aes(y = precip_tas_pred, x = date)) + geom_col()
 ggsave("barchart.svg")
 
 daily_data_pred %>% write_csv("data/daily_data_pred.csv")
 
 ```
+```{r}
+ndvi_time_series <- read_csv("data/ndvi_time_series.csv")
 
+ndvi_time_series_interp <- ndvi_time_series %>%
+  mutate(date_round = as.Date(lubridate::round_date(time, unit = "day"))) %>%
+  complete(date_round = seq.Date(from = min(date_round), to = max(date_round), by = "day")) %>%
+  mutate(ndvi = zoo::na.approx(ndvi)) %>%
+  mutate(rolling_ndvi = zoo::rollapply(ndvi, 365, mean, align='center', fill=NA))
+
+```
+
+```{r}
+
+maxRange <- 3/2
+coeff <- 2/3
+
+ggplot() + 
+geom_area(data = daily_data_pred, aes(y = precip_tas_pred, x = date), color="cadetblue") +
+geom_line(data = ndvi_time_series_interp, aes(y = ndvi/coeff, x = time), color="darkolivegreen2") +
+geom_line(data = ndvi_time_series_interp, aes(y = rolling_ndvi/coeff, x = time), color="seagreen") +
+scale_y_continuous(name = "precipitation",
+                 limit = c(0, maxRange),
+                 expand = c(0, 0),
+                 sec.axis = sec_axis(trans = ~.*coeff, 
+                                     name = "NDVI"))
+
+```
