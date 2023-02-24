@@ -29,9 +29,12 @@ import_streamflow_data <- function(csv) {
 
 new_years_storm <- import_streamflow_data("data/tc-bi580_2022-12-31.csv") 
 
-new_years_storm %>% ggplot(aes(y = streamflow_cfs, x = stage_ft)) + 
-  #geom_line() + 
-  geom_smooth()
+new_years_storm %>% 
+  ggplot(aes(y = streamflow_cfs, x = stage_ft)) + 
+    geom_line(color = "black") + 
+    scale_y_continuous(trans = 'log10', limits = c(10, 1e4)) + 
+    scale_x_continuous(trans = 'log10', limits = c(1, 5), breaks = 1:4) +
+    ggtitle("Rating Curve for TC_BI580 (Tassajara Creek Below I-580") 
 ```
 
 
@@ -81,10 +84,11 @@ new_years_storm_pred %>% ggplot(aes(x = stage_ft)) +
   geom_line(aes(y = streamflow_cfs_pred), color = "red") + 
   geom_line(aes(y = streamflow_cfs), color="black") +
   scale_y_continuous(trans = 'log10', limits = c(10, 1e4)) + 
-  scale_x_continuous(trans = 'log10', limits = c(1, 8), breaks = 1:8)
+  scale_x_continuous(trans = 'log10', limits = c(1, 8), breaks = 1:7) +
+  ggtitle("Rating curve extrapolated based on January 2023 HWM")
 ```
 
-```{r, fig.height = 3, fig.width = 6}
+```{r}
 #new_years_storm_pred %>% ggplot(aes(x = result_datetime)) + 
 #  geom_line(aes(y = streamflow_cfs_pred), color = "red") + 
 #  geom_line(aes(y = streamflow_cfs), color="black")
@@ -95,25 +99,23 @@ coeff <- 0.0005
 new_years_storm_pred %>% 
   filter(result_datetime < ymd("2023-01-23")) %>%
   ggplot(aes(x = result_datetime)) +
+  geom_area(aes(y = streamflow_cfs_pred, 
+                fill = "q_pred")) + 
+  geom_area(aes(y = streamflow_cfs, 
+                fill = "q")) +
   geom_tile(aes(y = maxRange - rain_intensity_in/coeff/2, 
                 height = rain_intensity_in/coeff, 
-                fill = 'PColor')
-            ) +
-  geom_area(aes(y = streamflow_cfs_pred), fill = "red", color = "red") + 
-  geom_area(aes(y = streamflow_cfs), fill = "black", color="black") +
+                fill = "precip")) +
   scale_y_continuous(name = "streamflow (cfs)",
                      limit = c(0, maxRange),
                      expand = c(0, 0),
                      sec.axis = sec_axis(trans = ~(.-maxRange)*coeff, 
                                          name = "precipitation (in/hr)")) +
-  scale_fill_manual(values = c('PColor' = "blue"),
-                    labels = c('PColor' = 'Precipitation'),
-                    name = NULL) +
-  scale_color_manual(values = c('black', '#e41a1c'), 
-                     name = NULL) +
-  guides(color = guide_legend(nrow = 1)) +
-  theme(legend.position = 'top')
-
+  theme(legend.position = 'top') + 
+  ggtitle("Dec 2022 - Jan 2023 rainfall and streamflow") +
+  scale_fill_manual(values = c("precip" = "blue", "q" = "black", "q_pred" = "red"),
+                    labels = c("precip" = "Precipitation", "q" = "Streamflow (gauged)", "q_pred" = "Streamflow (predicted)"),
+                    name = NULL) 
 
 ```
 
@@ -123,7 +125,7 @@ peak_flow_dec_2022 <- new_years_storm_pred %>%
   filter(date(result_datetime) == ymd("2022-12-31")) %>% 
   pull(streamflow_cfs_pred) %>% 
   max()
-
+print(peak_flow_dec_2022)
 ```
 
 
@@ -153,9 +155,15 @@ flow_freq_curve_inv <- flow_freq %>%
 
 peak_flows %>% bind_rows(flow_freq) %>%
   mutate(return_interval_y = flow_freq_curve_inv(discharge_cfs)) %>%
-  ggplot(aes(y = discharge_cfs, x = return_interval_y, label = case_when(!is.na(peak_flow_date) ~ as.character(peak_flow_date), TRUE ~ name))) + 
-  geom_line() + geom_point() + ggrepel::geom_text_repel() +
-  scale_y_continuous(trans='log10') + scale_x_continuous(trans='log10')
+  ggplot(aes(y = discharge_cfs, 
+             x = return_interval_y, 
+             label = case_when(!is.na(peak_flow_date) ~ as.character(peak_flow_date), TRUE ~ name))) + 
+  geom_line() + 
+  geom_point() + 
+  ggrepel::geom_text_repel() +
+  scale_y_continuous(trans='log10') + 
+  scale_x_continuous(trans='log10') + 
+  ggtitle("Flow frequency for model profiles")
 ```
 
 ```{r}
@@ -165,6 +173,21 @@ peak_flows %>% bind_rows(flow_freq) %>%
 # Hydraulics
 
 ```{r}
+cross_sections <- tribble(
+  ~cross_section, ~river_sta,
+  "B", 7600,
+  "D", 8200,
+  "E", 8800,
+  "F", 9300,
+  "G", 10200, 
+  "H", 10800
+)
+
+```
+
+Constants
+
+```{r}
 # gravitational constant, cm/s2
 g_cgs <- 981
 # grain density and water density, g/cm3
@@ -172,18 +195,125 @@ rho_s_cgs <- 2.65
 rho_cgs <- 1.00
 # kinematic viscosity of water, cm2/s
 nu_cgs <- 0.01
+```
 
-hwm_hydraulics <- read_csv("data/high_water_marks.csv") %>% 
+Helper functions for cross sectional geometry calculations
+
+```{r}
+
+prep_xs <- function(data, sta, elev, delta_x) {
+  data %>%
+    arrange({{sta}}) %>%
+    mutate(sta = {{sta}}) %>%
+    complete(sta = seq(from = min({{sta}}), to = max({{sta}}), by = delta_x)) %>%
+    mutate(gse = zoo::na.approx({{elev}}, x = sta)) %>% 
+    select(c(sta, gse))
+}
+
+calc_xs <- function(data, water_elev) {
+  data %>% 
+    arrange(sta) %>%
+    mutate(wse = case_when(water_elev > gse ~ water_elev),
+           delta_x = abs(lag(sta, 1) - sta),
+           delta_z = abs(lag(gse, 1) - gse),
+           depth = wse - gse, 
+           hyp_length = sqrt(delta_x^2 + delta_z^2)
+           ) %>%
+    filter(!is.na(wse)) %>% 
+    summarize(thalweg_elevation = min(gse),
+              water_surface_elevation = water_elev,
+              max_depth = water_surface_elevation - thalweg_elevation,
+              cross_sectional_area = sum(delta_x * depth),
+              wetted_perimeter = sum(hyp_length),
+              ) %>% 
+    as.list() %>% 
+    list_flatten()
+}
+
+plot_xs <- function(data, water_elev) {
+  data %>% 
+    arrange(sta) %>%
+    mutate(wse = case_when(water_elev > gse ~ water_elev)) %>%
+    ggplot(aes(x = sta)) + 
+      geom_line(aes(y = gse)) + 
+      geom_line(aes(y = wse))
+}
+  
+```
+
+
+Import surveyed cross section geometries 
+
+```{r message=FALSE, warning=FALSE}
+xs_b <- read_csv("data/xs_geom/xs_b.csv") %>%
+  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) 
+
+xs_d <- read_csv("data/xs_geom/xs_d.csv") %>%
+  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) 
+
+xs_e <- read_csv("data/xs_geom/xs_e.csv") %>%
+  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) 
+
+xs_f <- read_csv("data/xs_geom/xs_f.csv") %>%
+  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) 
+
+xs_g <- read_csv("data/xs_geom/xs_g.csv") %>%
+  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) 
+
+xs_h <- read_csv("data/xs_geom/xs_h.csv") %>%
+  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) 
+
+xs_dfs <- tribble(
+  ~xs_id, ~xs_df,
+  "B", xs_b,
+  "D", xs_d,
+  "E", xs_e,
+  "F", xs_f,
+  "G", xs_g,
+  "H", xs_h, 
+)
+
+xs_dfs %>% 
+  unnest() %>% 
+  ggplot(aes(y = gse, x = sta)) + 
+    facet_wrap(~xs_id) + 
+    geom_line() + 
+    ggtitle("Cross section geometries")
+```
+
+Example plot with a water surface intersected
+
+```{r}
+plot_xs(xs_b, 359)
+```
+
+Calculate hydraulic geometries under HWMs (hydraulic radius, etc)
+
+```{r}
+hwm_geometries <- read_csv("data/high_water_marks_v2.csv") %>%
   janitor::clean_names() %>%
+  left_join(xs_dfs, by = join_by(cross_section == xs_id)) %>%
+  mutate(result = map2(xs_df, hwm_elevation, calc_xs)) %>% 
+  unnest_wider(result)
+
+hwm_geometries
+```
+
+Calculate hydraulics based on hwm geometries and peak flows
+
+```{r}
+hwm_hydraulics <- hwm_geometries %>% 
+  rename(cross_sectional_area_ft2 = cross_sectional_area,
+         wetted_perimeter_ft = wetted_perimeter) %>%
   left_join(peak_flows) %>%
-  mutate(velocity_ft_s = discharge_cfs / cross_sectional_area_ft,
-         hydraulic_radius_ft = cross_sectional_area_ft / wetted_perimeter_ft,
-         mannings_n = 1.486 * cross_sectional_area_ft * hydraulic_radius_ft^(2/3) 
+  mutate(velocity_ft_s = discharge_cfs / cross_sectional_area_ft2,
+         hydraulic_radius_ft = cross_sectional_area_ft2 / wetted_perimeter_ft,
+         mannings_n = 1.486 * cross_sectional_area_ft2 * hydraulic_radius_ft^(2/3) 
                       * slope^(1/2) * discharge_cfs^(-1),
          # metric conversions
          velocity_m_s = velocity_ft_s / 0.3048,
          hydraulic_radius_m = hydraulic_radius_ft / 0.3048,
-         cross_sectional_area_m = cross_sectional_area_ft / 0.3048,
+         cross_sectional_area_m2 = cross_sectional_area_ft2 / 0.3048,
          # bed mobilization
          critical_shields_number = 0.15 * slope^(1/4),
          grain_size_mobilized_mm = 10 * rho_cgs * hydraulic_radius_m * slope / 
@@ -202,25 +332,90 @@ hwm_hydraulics
 
 ```
 
+Bankfull estimates (need to fix flow freq calc though)
 
 ```{r}
-# hwm_hydraulics %>% 
-#   select(c(series, cross_section, peak_flow_date, discharge_cfs, mannings_n, grain_size_mobilized_mm, grain_size_mobilized_phi, grain_size_suspended_mm, # grain_size_suspended_phi)) %>% 
-#   DT::datatable() %>% 
-#   DT::formatRound(~ mannings_n, 3) %>% 
-#   DT::formatRound(~ discharge_cfs + grain_size_mobilized_mm, 0) %>%
-#   DT::formatRound(~ grain_size_suspended_mm + grain_size_suspended_phi + grain_size_mobilized_phi, 2)
+bankfull <- tribble(
+    ~cross_section, ~bankfull_wse, 
+    "B", 359.08,
+    "D", 357.44,
+    "E", 352.73,
+    "F", 350.28,
+    "G", 346.27,
+    "H", 343.16  ) %>%
+  left_join(xs_dfs, by = join_by(cross_section == xs_id)) %>%
+  mutate(result = map2(xs_df, bankfull_wse, calc_xs)) %>% 
+  unnest_wider(result)
+
+bankfull %>% 
+  rename(cross_sectional_area_ft2 = cross_sectional_area,
+         wetted_perimeter_ft = wetted_perimeter) %>%
+  left_join(cross_sections) %>%
+  left_join(hwm_hydraulics %>% 
+              filter(series== "channel") %>% 
+              select(cross_section, slope, mannings_n)) %>%
+  mutate(hydraulic_radius_ft = cross_sectional_area_ft2 / wetted_perimeter_ft,
+         bankfull_discharge = 1.486 * cross_sectional_area_ft2 * hydraulic_radius_ft^(2/3) * slope^(1/2) * mannings_n^(-1),
+         bankfull_return_interval = flow_freq_curve_inv(bankfull_discharge))
+
 ```
 
+View RAS results
 
 ```{r}
-hwm_hydraulics %>% 
-  pivot_longer(cols = c(grain_size_suspended_mm, grain_size_mobilized_mm), names_to = "measure", values_to = "grain_size") %>%
-  ggplot(aes(x = cross_section, color = series)) + 
-  geom_point(aes(y = grain_size, group = series)) +
-  scale_color_manual(values = c("channel" = "black", "floodplain" = "red")) + 
-  facet_wrap(~measure, ncol = 1) +
-  scale_y_continuous(trans = "log2")
+ras_1d <- read_csv("data/hec_ras_1d_out_v2.csv") %>%
+  janitor::clean_names() %>% 
+  inner_join(cross_sections)
+
+ras_1d_pivot <- bind_rows(
+  ras_1d %>% pivot_longer(starts_with("q_")) %>% mutate(measure = "discharge_cfs", 
+                                                        loc = case_when(name == "q_total_cfs" ~ "total",
+                                                                        name == "q_channel_cfs" ~ "channel",
+                                                                        name == "q_left_cfs" ~ "left",
+                                                                        name == "q_right_cfs" ~ "right"
+                                                                        )),
+  ras_1d %>% pivot_longer(starts_with("area_")) %>% mutate(measure = "cross_sectional_area_ft2",
+                                                           loc = case_when(name == "area_sq_ft" ~ "total",
+                                                                           name == "area_channel_sq_ft" ~ "channel",
+                                                                           name == "area_left_sq_ft" ~ "left",
+                                                                           name == "area_right_sq_ft" ~ "right"
+                                                                        )),
+  ras_1d %>% pivot_longer(starts_with("hydr_")) %>% mutate(measure = "hydraulic_radius_ft", 
+                                                           loc = case_when(name == "hydr_radius_ft" ~ "total",
+                                                                           name == "hydr_radius_c_ft" ~ "channel",
+                                                                           name == "hydr_radius_l_ft" ~ "left",
+                                                                           name == "hydr_radius_r_ft" ~ "right"
+                                                                        ))) %>% 
+  select(reach, river_sta, profile, measure, loc, value) %>% 
+  pivot_wider(names_from = measure, values_from = value) %>%
+  left_join(ras_1d %>% select(cross_section, river_sta, profile, min_ch_el_ft, w_s_elev_ft, e_g_slope_ft_ft, q_total_cfs), by = c("river_sta", "profile"))   
+
+ras_1d_sed <- ras_1d_pivot %>% 
+  drop_na(discharge_cfs) %>%
+  mutate(series = case_when((loc == "left" | loc == "right") ~ "floodplain", TRUE ~ loc),
+                        velocity_ft_s = discharge_cfs / cross_sectional_area_ft2,
+                        slope = e_g_slope_ft_ft, # use this for now
+                       # metric conversions
+                       velocity_m_s = velocity_ft_s / 0.3048,
+                       hydraulic_radius_m = hydraulic_radius_ft / 0.3048,
+                       cross_sectional_area_m2 = cross_sectional_area_ft2 / 0.3048,
+                       # bed mobilization
+                       critical_shields_number = 0.15 * slope^(1/4),
+                       grain_size_mobilized_mm = 10 * rho_cgs * hydraulic_radius_m * slope / 
+                                       (critical_shields_number * (rho_s_cgs - rho_cgs)),
+                       grain_size_mobilized_phi = -log2(grain_size_mobilized_mm),
+                       # suspended transport
+                       shear_velocity_cm_s = sqrt(g_cgs * (hydraulic_radius_m*100) * slope),
+                       settling_velocity_ndim = rho_cgs * shear_velocity_cm_s^3 / 
+                                       ((rho_s_cgs - rho_cgs) * g_cgs * nu_cgs),
+                       grain_size_suspended_ndim = sqrt(5832 * settling_velocity_ndim),
+                       grain_size_suspended_mm = 10 * grain_size_suspended_ndim * rho_cgs * nu_cgs^2 /
+                                       ((rho_s_cgs - rho_cgs) * g_cgs)^(1/3),
+                       grain_size_suspended_phi = -log2(grain_size_suspended_mm)
+              )
+
+ras_1d_sed
+  
 ```
 
 ```{r}
@@ -232,8 +427,119 @@ mannings_n %>%
   ggplot(aes(x = cross_section, y = mannings_n, color = series, label = round(mannings_n,3))) + 
   #geom_point(aes(group = series)) +
   geom_label() +
-  scale_color_manual(values = c("channel" = "black", "floodplain" = "red")) 
+  scale_color_manual(values = c("channel" = "black", "floodplain" = "red")) + 
+  ggtitle("Manning's roughness estimates based on high water marks")
 
 ``` 
+
+```{r}
+hwm_hydraulics %>% 
+  pivot_longer(cols = c(grain_size_suspended_mm, grain_size_mobilized_mm), names_to = "measure", values_to = "grain_size") %>%
+  ggplot(aes(x = cross_section, color = series)) + 
+  geom_point(aes(y = grain_size, group = series)) +
+  scale_color_manual(values = c("channel" = "black", "floodplain" = "red")) + 
+  facet_wrap(~measure, ncol = 1) +
+  scale_y_continuous(trans = "log2") + 
+  ggtitle("Sediment transport estimates based on high water marks")
+```
+
+```{r}
+ras_1d_sed %>% 
+  filter(loc != "total") %>%
+  #group_by(series, cross_section, profile, q_total_cfs) %>% 
+  #summarize(velocity_ft_s = mean(velocity_ft_s)) %>%
+  ggplot(aes(x = q_total_cfs, y = velocity_ft_s, color = cross_section, label = cross_section, shape = loc)) + 
+  geom_point() + scale_shape_manual(values=c(19, 24, 25)) +
+  facet_grid(cols = vars(series)) + ggtitle("Velocity (via 1D model)") +
+  geom_hline(yintercept=10, linetype='dotted', col = 'red') + 
+  scale_x_continuous(breaks = breaks$q_total_cfs, labels = breaks$profile, position = "top", name = "", 
+                     sec.axis = sec_axis(trans = ~ ., name = "discharge (cfs)")) + 
+  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
+
+ras_1d_sed %>% 
+  filter(loc != "total") %>%
+  #group_by(series, cross_section, profile, q_total_cfs) %>% 
+  #summarize(grain_size_mobilized_mm = mean(grain_size_mobilized_mm)) %>%
+  ggplot(aes(x = q_total_cfs, y = grain_size_mobilized_mm, color = cross_section, label = cross_section, shape = loc)) + 
+  geom_point() + scale_shape_manual(values=c(19, 24, 25)) +
+  facet_grid(cols = vars(series)) + ggtitle("Bed Mobilization (via 1D model)") +
+  scale_y_continuous(limits = c(0,20), breaks = c(2^0, 2^1, 2^2, 2^3, 2^4)) + 
+    scale_x_continuous(breaks = breaks$q_total_cfs, labels = breaks$profile, position = "top", name = "", 
+                     sec.axis = sec_axis(trans = ~ ., name = "discharge (cfs)")) + 
+  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
+
+ras_1d_sed %>% 
+  filter(loc != "total") %>%
+  #group_by(series, cross_section, profile, q_total_cfs) %>% 
+  #summarize(grain_size_suspended_mm = mean(grain_size_suspended_mm)) %>%
+  ggplot(aes(x = q_total_cfs, y = grain_size_suspended_mm, color = cross_section, label = cross_section, shape = loc)) + 
+  geom_point() + scale_shape_manual(values=c(19, 24, 25)) +
+  facet_grid(cols = vars(series)) + ggtitle("Suspended Transport (via 1D model)") +
+  scale_y_continuous(limits = c(0,2.25), breaks = c(2^-3, 2^-2, 2^-1, 2^0, 2^1)) +
+    scale_x_continuous(breaks = breaks$q_total_cfs, labels = breaks$profile, position = "top", name = "", 
+                     sec.axis = sec_axis(trans = ~ ., name = "discharge (cfs)")) + 
+  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
+```
+
+```{r}
+breaks <- ras_1d_sed %>% group_by(profile, q_total_cfs) %>% summarize() %>% as.list()
+
+ras_1d_sed %>% 
+  filter(loc != "total") %>%
+  #group_by(series, cross_section, profile, q_total_cfs) %>% 
+  #summarize(velocity_ft_s = mean(velocity_ft_s)) %>%
+  ggplot(aes(x = q_total_cfs, y = velocity_ft_s)) + 
+  geom_point(aes(color = cross_section, label = cross_section, shape = series)) + scale_shape_manual(values=c(19, 21)) +
+  #facet_grid(cols = vars(series)) + 
+  ggtitle("Velocity (via 1D model)") +
+  geom_hline(yintercept=10, linetype='dotted', col = 'red') + 
+  scale_x_continuous(breaks = breaks$q_total_cfs, labels = breaks$profile, position = "top", name = "", 
+                     sec.axis = sec_axis(trans = ~ ., name = "discharge (cfs)")) + 
+  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
+
+```
+
+```{r}
+# ras_1d_sed %>% 
+#   ggplot(aes(x = discharge_cfs, y = grain_size_mobilized_mm, color = loc)) + 
+#   geom_point() + 
+#   facet_grid(rows = vars(cross_section), cols = vars(profile))
+```
+
+```{r}
+# ras_1d_sed %>% 
+#   filter(profile == "31 Dec 2022") %>%
+#   filter(loc != "total") %>%
+#   ggplot(aes(x = discharge_cfs, y = grain_size_mobilized_mm, shape = loc, color = cross_section)) + 
+#   geom_point() + 
+#   facet_grid(cols = vars(profile))
+```
+
+
+```{r}
+# ras_1d_sed %>% 
+#   filter(loc != "total") %>%
+#   pivot_longer(cols = c(grain_size_mobilized_mm, grain_size_suspended_mm, velocity_ft_s)) %>%
+#   group_by(series, cross_section, profile, q_total_cfs, name) %>% 
+#   summarize(value = mean(value)) %>%
+#   ggplot(aes(x = q_total_cfs, y = value, color = cross_section, label = cross_section)) + 
+#   geom_point() + 
+#   facet_grid(cols = vars(series), rows = vars(name), switch = "y") + 
+#   theme(strip.text.y.left = element_text(angle = 0))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
