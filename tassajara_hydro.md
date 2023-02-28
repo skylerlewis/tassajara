@@ -153,6 +153,51 @@ print(peak_flow_dec_2022)
 
     ## [1] 3464.893
 
+``` r
+# export the hydrograph for RAS 2D
+min_flow <- 100
+
+hydro_dec <- new_years_storm_pred %>% 
+  filter(between(result_datetime, ymd("2022-12-31"), ymd("2023-01-02"))) 
+ras_hydro_dec <- hydro_dec %>%
+  mutate(cfs = case_when(streamflow_cfs_pred > min_flow ~ streamflow_cfs_pred, TRUE ~ min_flow)) %>%
+  select(result_datetime, cfs) 
+
+ras_hydro_dec %>% write_csv("data/ras_hydro_2022-12-31.csv")
+ggplot() + geom_line(data = ras_hydro_dec, aes(x = result_datetime, y = cfs))
+```
+
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+
+``` r
+hydro_jan <- new_years_storm_pred %>% 
+  filter(between(result_datetime, ymd("2023-01-14"), ymd("2023-01-18")))
+ras_hydro_jan <- hydro_jan %>%
+  mutate(cfs = case_when(streamflow_cfs_pred > min_flow ~ streamflow_cfs_pred, TRUE ~ min_flow)) %>%
+  select(result_datetime, cfs) 
+
+ras_hydro_jan %>% write_csv("data/ras_hydro_2023-01-14.csv")
+ggplot() + geom_line(data = ras_hydro_jan, aes(x = result_datetime, y = cfs)) 
+```
+
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-6-2.png)<!-- -->
+
+``` r
+# scale December hydrograph to 5200 cfs 100-year flow, 
+# as a simple approximation of the 100-year storm
+
+multiplier <- 5200 / max(ras_hydro_dec$cfs)
+
+ras_hydro_q100 <- hydro_dec %>% 
+  mutate(cfs = (cfs = case_when(streamflow_cfs_pred * multiplier > min_flow ~ streamflow_cfs_pred * multiplier, TRUE ~ min_flow))) %>%
+  select(result_datetime, cfs)
+
+ras_hydro_q100 %>% write_csv("data/ras_hydro_q100.csv")
+ggplot() + geom_line(data = ras_hydro_q100, aes(x = result_datetime, y = cfs))
+```
+
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+
 # Flow Frequency
 
 ``` r
@@ -177,20 +222,24 @@ flow_freq_curve <- flow_freq %>%
 flow_freq_curve_inv <- flow_freq %>% 
   power_function_fit(y = return_interval_y, x = discharge_cfs)
 
-peak_flows %>% bind_rows(flow_freq) %>%
-  mutate(return_interval_y = flow_freq_curve_inv(discharge_cfs)) %>%
-  ggplot(aes(y = discharge_cfs, 
-             x = return_interval_y, 
-             label = case_when(!is.na(peak_flow_date) ~ as.character(peak_flow_date), TRUE ~ name))) + 
-  geom_line() + 
-  geom_point() + 
-  ggrepel::geom_text_repel() +
+flow_freq_pred <- flow_freq %>%
+  mutate(return_interval_y_pred = flow_freq_curve_inv(discharge_cfs))
+
+peak_flows_pred <- peak_flows %>%
+  mutate(return_interval_y_pred = flow_freq_curve_inv(discharge_cfs))
+
+ggplot() + 
+  geom_point(data = flow_freq, aes(y = discharge_cfs, x = return_interval_y)) + 
+  geom_point(data = peak_flows_pred, aes(y = discharge_cfs, x = return_interval_y_pred), color = "red") + 
+  geom_line(data = flow_freq_pred, aes(y = discharge_cfs, x = return_interval_y_pred)) + 
   scale_y_continuous(trans='log10') + 
   scale_x_continuous(trans='log10') + 
-  ggtitle("Flow frequency for model profiles")
+  ggtitle("Flow frequency for model profiles") +
+  ggrepel::geom_text_repel(data = flow_freq, aes(y = discharge_cfs, x = return_interval_y, label = name)) + 
+  ggrepel::geom_text_repel(data = peak_flows_pred, aes(y = discharge_cfs, x = return_interval_y_pred, label = as.character(peak_flow_date)), color = "red") 
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
 ``` r
 #peak_flows %>% fasstr::compute_frequency_analysis()
@@ -200,13 +249,13 @@ peak_flows %>% bind_rows(flow_freq) %>%
 
 ``` r
 cross_sections <- tribble(
-  ~cross_section, ~river_sta,
-  "B", 7600,
-  "D", 8200,
-  "E", 8800,
-  "F", 9300,
-  "G", 10200, 
-  "H", 10800
+  ~cross_section, ~station_1d, ~station_2d,
+  "B", 10800,  490,  # 3828,  
+  "D", 10200, 1210,  # 3157,   
+  "E",  9300, 2061,  # 2568,   
+  "F",  8800, 2568,  # 2061,  
+  "G",  8200, 3157,  # 1210,  
+  "H",  7600, 3828,  # 490 # , "580", ...4242
 )
 ```
 
@@ -303,7 +352,7 @@ xs_dfs %>%
     ggtitle("Cross section geometries")
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 Example plot with a water surface intersected
 
@@ -313,7 +362,7 @@ plot_xs(xs_b, 359)
 
     ## Warning: Removed 1421 rows containing missing values (`geom_line()`).
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
 
 Calculate hydraulic geometries under HWMs (hydraulic radius, etc)
 
@@ -426,12 +475,57 @@ hwm_hydraulics
     ## #   grain_size_mobilized_phi <dbl>, shear_velocity_cm_s <dbl>,
     ## #   settling_velocity_ndim <dbl>, grain_size_suspended_ndim <dbl>, …
 
-View RAS results
+Bankfull estimates (need to fix flow freq calc though)
+
+``` r
+bankfull <- tribble(
+    ~cross_section, ~bankfull_wse, 
+    "B", 359.08,
+    "D", 357.44,
+    "E", 352.73,
+    "F", 350.28,
+    "G", 346.27,
+    "H", 343.16  ) %>%
+  left_join(xs_dfs, by = join_by(cross_section == xs_id)) %>%
+  mutate(result = map2(xs_df, bankfull_wse, calc_xs)) %>% 
+  unnest_wider(result)
+
+bankfull %>% 
+  rename(cross_sectional_area_ft2 = cross_sectional_area,
+         wetted_perimeter_ft = wetted_perimeter) %>%
+  left_join(cross_sections) %>%
+  left_join(hwm_hydraulics %>% 
+              filter(series== "channel") %>% 
+              select(cross_section, slope, mannings_n)) %>%
+  mutate(hydraulic_radius_ft = cross_sectional_area_ft2 / wetted_perimeter_ft,
+         bankfull_discharge = 1.486 * cross_sectional_area_ft2 * hydraulic_radius_ft^(2/3) * slope^(1/2) * mannings_n^(-1),
+         bankfull_return_interval = flow_freq_curve_inv(bankfull_discharge))
+```
+
+    ## Joining with `by = join_by(cross_section)`
+    ## Joining with `by = join_by(cross_section)`
+
+    ## # A tibble: 6 × 15
+    ##   cross_section bankf…¹ xs_df    thalw…² water…³ max_d…⁴ cross…⁵ wette…⁶ stati…⁷
+    ##   <chr>           <dbl> <list>     <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>
+    ## 1 B                359. <tibble>    352.    359.    7.5     190.    58.8   10800
+    ## 2 D                357. <tibble>    348.    357.    9.59    255.   142.    10200
+    ## 3 E                353. <tibble>    344.    353.    8.41    110.    32.8    9300
+    ## 4 F                350. <tibble>    343.    350.    7.09    162.    77.3    8800
+    ## 5 G                346. <tibble>    342.    346.    4.66    114.    85.3    8200
+    ## 6 H                343. <tibble>    339.    343.    3.77    113.    54.5    7600
+    ## # … with 6 more variables: station_2d <dbl>, slope <dbl>, mannings_n <dbl>,
+    ## #   hydraulic_radius_ft <dbl>, bankfull_discharge <dbl>,
+    ## #   bankfull_return_interval <dbl>, and abbreviated variable names
+    ## #   ¹​bankfull_wse, ²​thalweg_elevation, ³​water_surface_elevation, ⁴​max_depth,
+    ## #   ⁵​cross_sectional_area_ft2, ⁶​wetted_perimeter_ft, ⁷​station_1d
+
+View RAS 1D results
 
 ``` r
 ras_1d <- read_csv("data/hec_ras_1d_out_v2.csv") %>%
   janitor::clean_names() %>% 
-  inner_join(cross_sections)
+  inner_join(cross_sections, by = join_by(river_sta == station_1d))
 ```
 
     ## Rows: 80 Columns: 18
@@ -442,7 +536,6 @@ ras_1d <- read_csv("data/hec_ras_1d_out_v2.csv") %>%
     ## 
     ## ℹ Use `spec()` to retrieve the full column specification for this data.
     ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-    ## Joining with `by = join_by(river_sta)`
 
 ``` r
 ras_1d_pivot <- bind_rows(
@@ -498,16 +591,16 @@ ras_1d_sed
     ## # A tibble: 181 × 26
     ##    reach   river…¹ profile loc   disch…² cross…³ hydra…⁴ cross…⁵ min_c…⁶ w_s_e…⁷
     ##    <chr>     <dbl> <chr>   <chr>   <dbl>   <dbl>   <dbl> <chr>     <dbl>   <dbl>
-    ##  1 Gleaso…   10800 Q2      total  650     107.      2.82 H          352.    357.
-    ##  2 Gleaso…   10800 Q2      chan…  650     107.      2.82 H          352.    357.
-    ##  3 Gleaso…   10800 Q5      total 1200     179.      3.73 H          352.    359.
-    ##  4 Gleaso…   10800 Q5      chan… 1200.    179.      3.9  H          352.    359.
-    ##  5 Gleaso…   10800 Q5      right    0.03    0.16    0.08 H          352.    359.
-    ##  6 Gleaso…   10800 Q100 F… total 4300     404.      3.83 H          352.    362.
-    ##  7 Gleaso…   10800 Q100 F… chan… 4111.    314.      5.64 H          352.    362.
-    ##  8 Gleaso…   10800 Q100 F… left     0.43    1.06    0.17 H          352.    362.
-    ##  9 Gleaso…   10800 Q100 F… right  188.     89.4     2.04 H          352.    362.
-    ## 10 Gleaso…   10800 Q100 AC total 5200     495.      4    H          352.    363.
+    ##  1 Gleaso…   10800 Q2      total  650     107.      2.82 B          352.    357.
+    ##  2 Gleaso…   10800 Q2      chan…  650     107.      2.82 B          352.    357.
+    ##  3 Gleaso…   10800 Q5      total 1200     179.      3.73 B          352.    359.
+    ##  4 Gleaso…   10800 Q5      chan… 1200.    179.      3.9  B          352.    359.
+    ##  5 Gleaso…   10800 Q5      right    0.03    0.16    0.08 B          352.    359.
+    ##  6 Gleaso…   10800 Q100 F… total 4300     404.      3.83 B          352.    362.
+    ##  7 Gleaso…   10800 Q100 F… chan… 4111.    314.      5.64 B          352.    362.
+    ##  8 Gleaso…   10800 Q100 F… left     0.43    1.06    0.17 B          352.    362.
+    ##  9 Gleaso…   10800 Q100 F… right  188.     89.4     2.04 B          352.    362.
+    ## 10 Gleaso…   10800 Q100 AC total 5200     495.      4    B          352.    363.
     ## # … with 171 more rows, 16 more variables: e_g_slope_ft_ft <dbl>,
     ## #   q_total_cfs <dbl>, series <chr>, velocity_ft_s <dbl>, slope <dbl>,
     ## #   velocity_m_s <dbl>, hydraulic_radius_m <dbl>,
@@ -515,15 +608,6 @@ ras_1d_sed
     ## #   grain_size_mobilized_mm <dbl>, grain_size_mobilized_phi <dbl>,
     ## #   shear_velocity_cm_s <dbl>, settling_velocity_ndim <dbl>,
     ## #   grain_size_suspended_ndim <dbl>, grain_size_suspended_mm <dbl>, …
-
-``` r
-# hwm_hydraulics %>% 
-#   select(c(series, cross_section, peak_flow_date, discharge_cfs, mannings_n, grain_size_mobilized_mm, grain_size_mobilized_phi, grain_size_suspended_mm, # grain_size_suspended_phi)) %>% 
-#   DT::datatable() %>% 
-#   DT::formatRound(~ mannings_n, 3) %>% 
-#   DT::formatRound(~ discharge_cfs + grain_size_mobilized_mm, 0) %>%
-#   DT::formatRound(~ grain_size_suspended_mm + grain_size_suspended_phi + grain_size_mobilized_phi, 2)
-```
 
 ``` r
 mannings_n <- hwm_hydraulics %>% 
@@ -543,7 +627,7 @@ mannings_n %>%
   ggtitle("Manning's roughness estimates based on high water marks")
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
 
 ``` r
 hwm_hydraulics %>% 
@@ -556,7 +640,14 @@ hwm_hydraulics %>%
   ggtitle("Sediment transport estimates based on high water marks")
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
+
+``` r
+breaks <- ras_1d_sed %>% group_by(profile, q_total_cfs) %>% summarize() %>% as.list()
+```
+
+    ## `summarise()` has grouped output by 'profile'. You can override using the
+    ## `.groups` argument.
 
 ``` r
 ras_1d_sed %>% 
@@ -564,12 +655,15 @@ ras_1d_sed %>%
   #group_by(series, cross_section, profile, q_total_cfs) %>% 
   #summarize(velocity_ft_s = mean(velocity_ft_s)) %>%
   ggplot(aes(x = q_total_cfs, y = velocity_ft_s, color = cross_section, label = cross_section, shape = loc)) + 
-  geom_point() + scale_shape_manual(values=c(21, 24, 25)) +
+  geom_point() + scale_shape_manual(values=c(19, 24, 25)) +
   facet_grid(cols = vars(series)) + ggtitle("Velocity (via 1D model)") +
-  geom_hline(yintercept=10, linetype='dotted', col = 'red')
+  geom_hline(yintercept=10, linetype='dotted', col = 'red') + 
+  scale_x_continuous(breaks = breaks$q_total_cfs, labels = breaks$profile, position = "top", name = "", 
+                     sec.axis = sec_axis(trans = ~ ., name = "discharge (cfs)")) + 
+  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
 
 ``` r
 ras_1d_sed %>% 
@@ -577,12 +671,15 @@ ras_1d_sed %>%
   #group_by(series, cross_section, profile, q_total_cfs) %>% 
   #summarize(grain_size_mobilized_mm = mean(grain_size_mobilized_mm)) %>%
   ggplot(aes(x = q_total_cfs, y = grain_size_mobilized_mm, color = cross_section, label = cross_section, shape = loc)) + 
-  geom_point() + scale_shape_manual(values=c(21, 24, 25)) +
+  geom_point() + scale_shape_manual(values=c(19, 24, 25)) +
   facet_grid(cols = vars(series)) + ggtitle("Bed Mobilization (via 1D model)") +
-  scale_y_continuous(limits = c(0,20), breaks = c(2^0, 2^1, 2^2, 2^3, 2^4))
+  scale_y_continuous(limits = c(0,20), breaks = c(2^0, 2^1, 2^2, 2^3, 2^4)) + 
+    scale_x_continuous(breaks = breaks$q_total_cfs, labels = breaks$profile, position = "top", name = "", 
+                     sec.axis = sec_axis(trans = ~ ., name = "discharge (cfs)")) + 
+  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-19-2.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-21-2.png)<!-- -->
 
 ``` r
 ras_1d_sed %>% 
@@ -590,37 +687,196 @@ ras_1d_sed %>%
   #group_by(series, cross_section, profile, q_total_cfs) %>% 
   #summarize(grain_size_suspended_mm = mean(grain_size_suspended_mm)) %>%
   ggplot(aes(x = q_total_cfs, y = grain_size_suspended_mm, color = cross_section, label = cross_section, shape = loc)) + 
-  geom_point() + scale_shape_manual(values=c(21, 24, 25)) +
+  geom_point() + scale_shape_manual(values=c(19, 24, 25)) +
   facet_grid(cols = vars(series)) + ggtitle("Suspended Transport (via 1D model)") +
-  scale_y_continuous(limits = c(0,2.25), breaks = c(2^-3, 2^-2, 2^-1, 2^0, 2^1))
+  scale_y_continuous(limits = c(0,2.25), breaks = c(2^-3, 2^-2, 2^-1, 2^0, 2^1)) +
+    scale_x_continuous(breaks = breaks$q_total_cfs, labels = breaks$profile, position = "top", name = "", 
+                     sec.axis = sec_axis(trans = ~ ., name = "discharge (cfs)")) + 
+  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-19-3.png)<!-- -->
-
-``` r
-# ras_1d_sed %>% 
-#   ggplot(aes(x = discharge_cfs, y = grain_size_mobilized_mm, color = loc)) + 
-#   geom_point() + 
-#   facet_grid(rows = vars(cross_section), cols = vars(profile))
-```
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-21-3.png)<!-- -->
 
 ``` r
-# ras_1d_sed %>% 
-#   filter(profile == "31 Dec 2022") %>%
-#   filter(loc != "total") %>%
-#   ggplot(aes(x = discharge_cfs, y = grain_size_mobilized_mm, shape = loc, color = cross_section)) + 
-#   geom_point() + 
-#   facet_grid(cols = vars(profile))
+ras_1d_sed %>% 
+  filter(loc != "total") %>%
+  #group_by(series, cross_section, profile, q_total_cfs) %>% 
+  #summarize(velocity_ft_s = mean(velocity_ft_s)) %>%
+  ggplot(aes(x = q_total_cfs, y = velocity_ft_s)) + 
+  geom_point(aes(color = cross_section, shape = series)) + scale_shape_manual(values=c(19, 21)) +
+  #facet_grid(cols = vars(series)) + 
+  ggtitle("Velocity (via 1D model)") +
+  geom_hline(yintercept=10, linetype='dotted', col = 'red') + 
+  scale_x_continuous(breaks = breaks$q_total_cfs, labels = breaks$profile, position = "top", name = "", 
+                     sec.axis = sec_axis(trans = ~ ., name = "discharge (cfs)")) + 
+  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
 ```
 
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
+
+# View RAS 2D results
+
 ``` r
-# ras_1d_sed %>% 
-#   filter(loc != "total") %>%
-#   pivot_longer(cols = c(grain_size_mobilized_mm, grain_size_suspended_mm, velocity_ft_s)) %>%
-#   group_by(series, cross_section, profile, q_total_cfs, name) %>% 
-#   summarize(value = mean(value)) %>%
-#   ggplot(aes(x = q_total_cfs, y = value, color = cross_section, label = cross_section)) + 
-#   geom_point() + 
-#   facet_grid(cols = vars(series), rows = vars(name), switch = "y") + 
-#   theme(strip.text.y.left = element_text(angle = 0))
+# RAS 2D results
+ras_2d_gse <- read_csv("data/hec_ras_2d_profile_terrain.csv") %>%
+  janitor::clean_names()
 ```
+
+    ## Rows: 21282 Columns: 3
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## dbl (3): ID, Station (ft), Terrain Profile (ft)
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+ras_2d_wse <- read_csv("data/hec_ras_2d_profile_wse_max.csv") %>%
+  janitor::clean_names()
+```
+
+    ## Rows: 7000 Columns: 3
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## dbl (3): ID, Station (ft), WSE 'Max' (feet)
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+ras_2d_gse_bda <- read_csv("data/hec_ras_2d_profile_terrain_bda.csv") %>%
+  janitor::clean_names()
+```
+
+    ## Rows: 27343 Columns: 3
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## dbl (3): ID, Station (ft), Terrain Profile (ft)
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+ras_2d_wse_bda <- read_csv("data/hec_ras_2d_profile_wse_max_bda.csv") %>%
+  janitor::clean_names()
+```
+
+    ## Rows: 7022 Columns: 3
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## dbl (3): ID, Station (ft), WSE 'Max' (feet)
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+# RAS 1D results
+hwm_dec_2022 <- hwm_geometries %>% 
+  filter(peak_flow_date == "2022-12-31") %>% 
+  left_join(cross_sections)
+```
+
+    ## Joining with `by = join_by(cross_section)`
+
+``` r
+# Upper bank elevations calculated in ArcGIS
+bank_elev <- inner_join(
+    read_csv("data/bank_elev_lb.csv") %>%
+      janitor::clean_names() %>% 
+      rename(station_2d = objectid, bank_elev_left = elev) %>%
+      select(station_2d, bank_elev_left),
+    read_csv("data/bank_elev_rb.csv") %>%
+      janitor::clean_names() %>% 
+      rename(station_2d = objectid, bank_elev_right = elev) %>%
+      select(station_2d, bank_elev_right)
+  ) %>%
+  mutate(bank_elev_min = case_when(
+    bank_elev_left < bank_elev_right ~ bank_elev_left, 
+    TRUE ~bank_elev_right)) %>%
+  mutate(bank_elev_rolling_med = zoo::rollapply(bank_elev_min, 100, median, partial=T))
+```
+
+    ## Rows: 4509 Columns: 7
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr (1): Shape *
+    ## dbl (6): OBJECTID *, ORIG_FID, FID_, FID_lidar2, Shape_Leng, elev
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+    ## Rows: 4509 Columns: 7
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr (1): Shape *
+    ## dbl (6): OBJECTID *, ORIG_FID, FID_, FID_lidar2, Shape_Leng, elev
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+    ## Joining with `by = join_by(station_2d)`
+
+``` r
+# Floodplain elevations (25ft from thalweg) calculated in ArcGIS
+floodplain_elev <- inner_join(
+    read_csv("data/bank_elev_lb_floodplain.csv") %>%
+      janitor::clean_names() %>% 
+      rename(station_2d = objectid, floodplain_elev_left = elev) %>%
+      select(station_2d, floodplain_elev_left),
+    read_csv("data/bank_elev_rb_floodplain.csv") %>%
+      janitor::clean_names() %>% 
+      rename(station_2d = objectid, floodplain_elev_right = elev) %>%
+      select(station_2d, floodplain_elev_right)
+  ) %>%
+  mutate(floodplain_elev_min = case_when(
+    floodplain_elev_left < floodplain_elev_right ~ floodplain_elev_left, 
+    TRUE ~floodplain_elev_right)) %>%
+  mutate(floodplain_elev_rolling_med = zoo::rollapply(floodplain_elev_min, 100, median, partial=T))
+```
+
+    ## Rows: 4509 Columns: 7
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr (1): Shape *
+    ## dbl (6): OBJECTID *, ORIG_FID, FID_, FID_lidar2, Shape_Leng, elev
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+    ## Rows: 4509 Columns: 7
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr (1): Shape *
+    ## dbl (6): OBJECTID *, ORIG_FID, FID_, FID_lidar2, Shape_Leng, elev
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+    ## Joining with `by = join_by(station_2d)`
+
+``` r
+ggplot() + 
+  geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile")) + 
+  geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)")) +
+  geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), linetype = "dashed") + 
+  geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), linetype = "dashed") +
+  geom_point(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation, color = "Terrain Profile")) +
+  geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "Surveyed HWM"), shape = 9, size = 4) + 
+  geom_point(data = filter(ras_1d, profile=="31 Dec 2022"), aes(x = station_2d, y = w_s_elev_ft, color = "Water Surface (RAS)")) +
+  geom_smooth(data = bank_elev, aes(x = station_2d, y = bank_elev_rolling_med, color = "Appx. Ground Surface"), 
+              method = "gam", linetype = "dashed", size = 0.75) +
+  geom_smooth(data = floodplain_elev, aes(x = station_2d, y = floodplain_elev_rolling_med, color = "Appx. Ground Surface"), 
+              method = "gam", linetype = "dashed", size = 0.75) +
+  scale_color_manual(values = c("Terrain Profile" = "black", 
+                                "Appx. Ground Surface" = "black", 
+                                "Water Surface (RAS)" = "blue",
+                                "Surveyed HWM" = "red"))
+```
+
+    ## Warning: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
+    ## ℹ Please use `linewidth` instead.
+
+    ## `geom_smooth()` using formula = 'y ~ s(x, bs = "cs")'
+    ## `geom_smooth()` using formula = 'y ~ s(x, bs = "cs")'
+
+    ## Warning: Removed 23 rows containing missing values (`geom_line()`).
+
+    ## Warning: Removed 23 rows containing missing values (`geom_line()`).
+
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-26-1.png)<!-- -->

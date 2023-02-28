@@ -487,6 +487,8 @@ hwm_hydraulics %>%
 ```
 
 ```{r}
+breaks <- ras_1d_sed %>% group_by(profile, q_total_cfs) %>% summarize() %>% as.list()
+
 ras_1d_sed %>% 
   filter(loc != "total") %>%
   #group_by(series, cross_section, profile, q_total_cfs) %>% 
@@ -525,8 +527,6 @@ ras_1d_sed %>%
 ```
 
 ```{r}
-breaks <- ras_1d_sed %>% group_by(profile, q_total_cfs) %>% summarize() %>% as.list()
-
 ras_1d_sed %>% 
   filter(loc != "total") %>%
   #group_by(series, cross_section, profile, q_total_cfs) %>% 
