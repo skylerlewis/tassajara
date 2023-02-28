@@ -1752,165 +1752,184 @@ display: none;
 
 
 <!-- rnb-text-begin -->
+<p>First, set up Conda environment in Terminal if needed. Should also
+have a GEE API. And <a href="https://cloud.google.com/sdk/docs/install" class="uri">https://cloud.google.com/sdk/docs/install</a> Google Cloud
+CLI must be installed for earthengine authenticate to work.</p>
+<pre><code>conda create --name gee 
+conda activate gee    
+conda install -n gee -c conda-forge earthengine-api 
+conda install -n gee pandas
+earthengine authenticate</code></pre>
+<p>Initiate R packages</p>
 <!-- rnb-text-end -->
 <!-- rnb-text-begin -->
-<div id="initial-tests-and-dev" class="section level1">
-<h1>initial tests and dev</h1>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxueHMgPC0gcmVhZF9jc3YoXCJkYXRhL3hzX2dlb20veHNfYi5jc3ZcIikgJT4lIFxuICBhcnJhbmdlKHN0YXRpb25fbGVmdF9iYW5rX2Z0KSAlPiVcbiAgY29tcGxldGUoc3RhdGlvbl9sZWZ0X2JhbmtfZnQgPSBzZXEoZnJvbSA9IG1pbihzdGF0aW9uX2xlZnRfYmFua19mdCksIHRvID0gbWF4KHN0YXRpb25fbGVmdF9iYW5rX2Z0KSwgYnkgPSBkZWx0YV94KSkgJT4lXG4gIG11dGF0ZShnc2UgPSB6b286Om5hLmFwcHJveChlbGV2YXRpb25fbmd2ZDI5X2Z0LCB4ID0gc3RhdGlvbl9sZWZ0X2JhbmtfZnQpKSAlPiUgXG4gIG11dGF0ZSh3c2UgPSBjYXNlX3doZW4oaHdtID49IGdzZSB+IGh3bSkpXG5cbmBgYCJ9 -->
-<pre class="r"><code>xs &lt;- read_csv(&quot;data/xs_geom/xs_b.csv&quot;) %&gt;% 
-  arrange(station_left_bank_ft) %&gt;%
-  complete(station_left_bank_ft = seq(from = min(station_left_bank_ft), to = max(station_left_bank_ft), by = delta_x)) %&gt;%
-  mutate(gse = zoo::na.approx(elevation_ngvd29_ft, x = station_left_bank_ft)) %&gt;% 
-  mutate(wse = case_when(hwm &gt;= gse ~ hwm))
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuICAjIGluc3RhbGwgZWFydGggZW5naW5lIEFQSSBmb3IgdGhlIGZpcnN0IHRpbWUgKHJlcXVpcmVzIEFuYWNvbmRhIFB5dGhvbiBlbnZpLCBvciB3aWxsIGluc3RhbGwgbWluaWNvbmRhIGZvciB5b3UpXG4gIGVlX2luc3RhbGwoKVxuXG5gYGAifQ== -->
+<pre class="r"><code>  # install earth engine API for the first time (requires Anaconda Python envi, or will install miniconda for you)
+  ee_install()
 </code></pre>
 <!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiUm93czogNzQgQ29sdW1uczogMuKUgOKUgCBDb2x1bW4gc3BlY2lmaWNhdGlvbiDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIBcbkRlbGltaXRlcjogXCIsXCJcbmRibCAoMik6IHN0YXRpb25fbGVmdF9iYW5rX2Z0LCBlbGV2YXRpb25fbmd2ZDI5X2Z0XG7ihLkgVXNlIGBzcGVjKClgIHRvIHJldHJpZXZlIHRoZSBmdWxsIGNvbHVtbiBzcGVjaWZpY2F0aW9uIGZvciB0aGlzIGRhdGEuXG7ihLkgU3BlY2lmeSB0aGUgY29sdW1uIHR5cGVzIG9yIHNldCBgc2hvd19jb2xfdHlwZXMgPSBGQUxTRWAgdG8gcXVpZXQgdGhpcyBtZXNzYWdlLlxuIn0= -->
-<pre><code>Rows: 74 Columns: 2── Column specification ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Delimiter: &quot;,&quot;
-dbl (2): station_left_bank_ft, elevation_ngvd29_ft
-ℹ Use `spec()` to retrieve the full column specification for this data.
-ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
+<!-- rnb-output-begin eyJkYXRhIjoicmV0aWN1bGF0ZSBkaWQgbm90IGZpbmQgYW55IFB5dGhvbiBFTlYgb24geW91ciBzeXN0ZW0uXG5cbldvdWxkIHlvdSBsaWtlIHRvIGRvd25sb2FkIGFuZCBpbnN0YWxsIE1pbmljb25kYT9cbk1pbmljb25kYSBpcyBhbiBvcGVuIHNvdXJjZSBlbnZpcm9ubWVudCBtYW5hZ2VtZW50IHN5c3RlbSBmb3IgUHl0aG9uLlxuU2VlIGh0dHBzOi8vZG9jcy5jb25kYS5pby9lbi9sYXRlc3QvbWluaWNvbmRhLmh0bWwgZm9yIG1vcmUgZGV0YWlscy5cbldpbmRvd3MgdXNlcnMgbXVzdCBpbnN0YWxsIG1pbmljb25kYS9hbmFjb25kYSB0byB1c2UgcmdlZSFcblxuSWYgeW91IHRoaW5rIGl0IGlzIGFuIGVycm9yIHNpbmNlIHlvdSBrbm93IHlvdSBoYXZlIGEgUHl0aG9uIGVudmlyb25tZW50XG5pbiB5b3VyIHN5c3RlbS4gUnVuIGFzIGZvbGxvdyB0byBzb2x2ZTpcbi0gVXNpbmcgdGhlIHJnZWUgQVBJOlxuMS4gcmdlZTo6ZWVfY2xlYW5fcHllbnYoKVxuMi4gcmdlZTo6ZWVfaW5zdGFsbF9zZXRfcHllbnYocHlfcGF0aCA9IFwiWU9VUl9QWVRIT05fUEFUSF9HT0VTX0hFUkVcIilcbjMuIFJlc3RhcnQgeW91ciBzeXN0ZW0uXG4tIFVzaW5nIFJzdHVkaW8gMS40OlxuICAgaHR0cHM6Ly9naXRodWIuY29tL3Itc3BhdGlhbC9yZ2VlL3RyZWUvaGVscC9yc3R1ZGlvL1xuIn0= -->
+<pre><code>reticulate did not find any Python ENV on your system.
+
+Would you like to download and install Miniconda?
+Miniconda is an open source environment management system for Python.
+See https://docs.conda.io/en/latest/miniconda.html for more details.
+Windows users must install miniconda/anaconda to use rgee!
+
+If you think it is an error since you know you have a Python environment
+in your system. Run as follow to solve:
+- Using the rgee API:
+1. rgee::ee_clean_pyenv()
+2. rgee::ee_install_set_pyenv(py_path = &quot;YOUR_PYTHON_PATH_GOES_HERE&quot;)
+3. Restart your system.
+- Using Rstudio 1.4:
+   https://github.com/r-spatial/rgee/tree/help/rstudio/</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxueVxuYGBgIn0= -->
+<pre class="r"><code>y</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiRXJyb3I6IE1pbmljb25kYSBpcyBhbHJlYWR5IGluc3RhbGxlZCBhdCBwYXRoIFwiQzovVXNlcnMvc2t5bGVybGV3aXMvQXBwRGF0YS9Mb2NhbC9yLW1pbmljb25kYVwiLlxuLSBVc2UgYHJldGljdWxhdGU6Omluc3RhbGxfbWluaWNvbmRhKGZvcmNlID0gVFJVRSlgIHRvIG92ZXJ3cml0ZSB0aGUgcHJldmlvdXMgaW5zdGFsbGF0aW9uLlxuIn0= -->
+<pre><code>Error: Miniconda is already installed at path &quot;C:/Users/skylerlewis/AppData/Local/r-miniconda&quot;.
+- Use `reticulate::install_miniconda(force = TRUE)` to overwrite the previous installation.</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<pre><code>earthengine authenticate</code></pre>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBhdXRoZW50aWNhdGUgZWFydGggZW5naW5lIEFQSSAocmVxdWlyZXMgYWNjb3VudCBjcmVhdGVkIGF0IGNvZGUuZWFydGhlbmdpbmUuZ29vZ2xlLmNvbSlcbmVlX0luaXRpYWxpemUodXNlciA9IFwic2t5bGVybGV3aXNAYmVya2VsZXkuZWR1XCIsIGRyaXZlID0gVCwgZ2NzID0gRilcblxuYGBgIn0= -->
+<pre class="r"><code># authenticate earth engine API (requires account created at code.earthengine.google.com)
+ee_Initialize(user = &quot;skylerlewis@berkeley.edu&quot;, drive = T, gcs = F)
+</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiRXJyb3IgaW4gcmV0aWN1bGF0ZTo6cHlfZGlzY292ZXJfY29uZmlnKCkgOiBcbiAgUHl0aG9uIHNwZWNpZmllZCBpbiBSRVRJQ1VMQVRFX1BZVEhPTiAoQzpcXFVzZXJzXFxza3lsZXJsZXdpc1xcYW5hY29uZGEzXFxlbnZzXFxyZ2VlL3B5dGhvbi5leGUpIGRvZXMgbm90IGV4aXN0XG4ifQ== -->
+<pre><code>Error in reticulate::py_discover_config() : 
+  Python specified in RETICULATE_PYTHON (C:\Users\skylerlewis\anaconda3\envs\rgee/python.exe) does not exist</code></pre>
 <!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjpbInRibF9kZiIsInRibCIsImRhdGEuZnJhbWUiXSwibnJvdyI6MSwibmNvbCI6Mywic3VtbWFyeSI6eyJBIHRpYmJsZSI6WyIxIMOXIDMiXX19LCJyZGYiOiJINHNJQUFBQUFBQUFCbDFRc1U3RE1CQzlKQTNRU0MyVllHQmpZMHNraEpEWTZJRFlXQkJJM1NKakcycmgyc0YyVkJBTEF5dGYxWUYvNEN0WVdGdk9TU3hRTE5tKzkzeDM3NTJ2TDJZbjJTd0RnQVFHY1F4SmlpR2t0emVYK1JrZ2d5Q0NBUXo5L1l4SmUwMG13TmdUVS9ieklROU80USt2cGp1SFg1OEJuMzhmclY3ZnI1NTZqVkpGRnR4aU1HbGxHM0tmR20xdGFUbDFRaXNpUzJJNDZkNG1TKzRjWjJYRmpWaHd4MDNnNXkvTWtGb0tXaHJDUkcxN1FrT2psMFVRRytHTzMvRFk0T283b3BMWTRDaVFHU09PRlBjRzZ4R3RleVhidXZKR3NTajJmNUwyaWlQVEkzWnI1WjJ3bk01cjlaZ2ZlNEhtdVYyakxvNyt4VWtyR1crNlZtblhhb3VyQjZGNDhDN0pIWmNkR09QRXpjQkZaWVJ5WVJKa2JlRzBJeUV2bzFvR3Bwa04xcjlFenkwZUNnSUFBQT09In0= -->
-<div data-pagedtable="false">
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":["cross_sectional_area"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["wetted_perimeter"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["hydraulic_radius"],"name":[3],"type":["dbl"],"align":["right"]}],"data":[{"1":"167.6735","2":"166.1016","3":"1.009464"}],"options":{"columns":{"min":{},"max":[10],"total":[3]},"rows":{"min":[10],"max":[10],"total":[1]},"pages":{}}}
-  </script>
-</div>
-<!-- rnb-frame-end -->
-<!-- rnb-chunk-end -->
-<!-- rnb-text-begin -->
-</div>
-<div id="as-functions" class="section level1">
-<h1>as functions</h1>
-<!-- rnb-text-end -->
-<!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuXG5wcmVwX3hzIDwtIGZ1bmN0aW9uKGRhdGEsIHN0YSwgZWxldiwgd3NlLCBkZWx0YV94KSB7XG4gIGRhdGEgJT4lXG4gICAgYXJyYW5nZSh7e3N0YX19KSAlPiVcbiAgICBtdXRhdGUoc3RhID0ge3tzdGF9fSkgJT4lXG4gICAgY29tcGxldGUoc3RhID0gc2VxKGZyb20gPSBtaW4oe3tzdGF9fSksIHRvID0gbWF4KHt7c3RhfX0pLCBieSA9IGRlbHRhX3gpKSAlPiVcbiAgICBtdXRhdGUoZ3NlID0gem9vOjpuYS5hcHByb3goe3tlbGV2fX0sIHggPSBzdGEpKSAlPiUgXG4gICAgbXV0YXRlKHdzZSA9IGNhc2Vfd2hlbihod20gPj0gZ3NlIH4gd3NlKSkgJT4lXG4gICAgc2VsZWN0KGMoc3RhLCBnc2UsIHdzZSkpXG59XG5cbmNhbGNfeHMgPC0gZnVuY3Rpb24oZGF0YSkge1xuICBkYXRhICU+JSBcbiAgICBtdXRhdGUoZGVsdGFfeCA9IGFicyhsYWcoc3RhLCAxKSAtIHN0YSksXG4gICAgICAgICAgIGRlbHRhX3ogPSBhYnMobGFnKGdzZSwgMSkgLSBnc2UpLFxuICAgICAgICAgICBkZXB0aCA9IHdzZSAtIGdzZSwgXG4gICAgICAgICAgIGh5cF9sZW5ndGggPSBzcXJ0KGRlbHRhX3heMiArIGRlbHRhX3peMilcbiAgICAgICAgICAgKSAlPiVcbiAgICBmaWx0ZXIoIWlzLm5hKHdzZSkpICU+JSBcbiAgICBzdW1tYXJpemUoY3Jvc3Nfc2VjdGlvbmFsX2FyZWEgPSBzdW0oZGVsdGFfeCAqIGRlcHRoKSxcbiAgICAgICAgICAgICAgd2V0dGVkX3BlcmltZXRlciA9IHN1bShoeXBfbGVuZ3RoKSxcbiAgICAgICAgICAgICAgaHlkcmF1bGljX3JhZGl1cyA9IGNyb3NzX3NlY3Rpb25hbF9hcmVhIC8gd2V0dGVkX3BlcmltZXRlcixcbiAgICAgICAgICAgICAgKVxufVxuXG5gYGAifQ== -->
-<pre class="r"><code>
-prep_xs &lt;- function(data, sta, elev, wse, delta_x) {
-  data %&gt;%
-    arrange({{sta}}) %&gt;%
-    mutate(sta = {{sta}}) %&gt;%
-    complete(sta = seq(from = min({{sta}}), to = max({{sta}}), by = delta_x)) %&gt;%
-    mutate(gse = zoo::na.approx({{elev}}, x = sta)) %&gt;% 
-    mutate(wse = case_when(hwm &gt;= gse ~ wse)) %&gt;%
-    select(c(sta, gse, wse))
-}
-
-calc_xs &lt;- function(data) {
-  data %&gt;% 
-    mutate(delta_x = abs(lag(sta, 1) - sta),
-           delta_z = abs(lag(gse, 1) - gse),
-           depth = wse - gse, 
-           hyp_length = sqrt(delta_x^2 + delta_z^2)
-           ) %&gt;%
-    filter(!is.na(wse)) %&gt;% 
-    summarize(cross_sectional_area = sum(delta_x * depth),
-              wetted_perimeter = sum(hyp_length),
-              hydraulic_radius = cross_sectional_area / wetted_perimeter,
-              )
-}
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxudXNlX2NvbmRhZW52KFwicmdlZVwiLCBjb25kYSA9IFwiYXV0b1wiLCByZXF1aXJlZCA9IFRSVUUpXG5cbmBgYCJ9 -->
+<pre class="r"><code>use_condaenv(&quot;rgee&quot;, conda = &quot;auto&quot;, required = TRUE)
 </code></pre>
 <!-- rnb-source-end -->
-<!-- rnb-chunk-end -->
-<!-- rnb-text-begin -->
-<!-- rnb-text-end -->
-<!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxueHNfYiA8LSByZWFkX2NzdihcImRhdGEveHNfZ2VvbS94c19iLmNzdlwiKSAlPiVcbiAgcHJlcF94cyhzdGEgPSBzdGF0aW9uX2xlZnRfYmFua19mdCwgZWxldiA9IGVsZXZhdGlvbl9uZ3ZkMjlfZnQsIGRlbHRhX3ggPSAwLjEpXG5gYGAifQ== -->
-<pre class="r"><code>xs_b &lt;- read_csv(&quot;data/xs_geom/xs_b.csv&quot;) %&gt;%
-  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1)</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiUm93czogNzQgQ29sdW1uczogMuKUgOKUgCBDb2x1bW4gc3BlY2lmaWNhdGlvbiDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIBcbkRlbGltaXRlcjogXCIsXCJcbmRibCAoMik6IHN0YXRpb25fbGVmdF9iYW5rX2Z0LCBlbGV2YXRpb25fbmd2ZDI5X2Z0XG7ihLkgVXNlIGBzcGVjKClgIHRvIHJldHJpZXZlIHRoZSBmdWxsIGNvbHVtbiBzcGVjaWZpY2F0aW9uIGZvciB0aGlzIGRhdGEuXG7ihLkgU3BlY2lmeSB0aGUgY29sdW1uIHR5cGVzIG9yIHNldCBgc2hvd19jb2xfdHlwZXMgPSBGQUxTRWAgdG8gcXVpZXQgdGhpcyBtZXNzYWdlLlxuIn0= -->
-<pre><code>Rows: 74 Columns: 2── Column specification ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Delimiter: &quot;,&quot;
-dbl (2): station_left_bank_ft, elevation_ngvd29_ft
-ℹ Use `spec()` to retrieve the full column specification for this data.
-ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.</code></pre>
+<!-- rnb-output-begin eyJkYXRhIjoiRVJST1I6IFRoZSByZXF1ZXN0ZWQgdmVyc2lvbiBvZiBQeXRob24gKCdDOlxcVXNlcnNcXHNreWxlcmxld2lzXFxBcHBEYXRhXFxMb2NhbFxcci1taW5pY29uZGFcXGVudnNcXHJnZWUvcHl0aG9uLmV4ZScpIGNhbm5vdCBiZSB1c2VkLCBhcyBhbm90aGVyXG52ZXJzaW9uIG9mIFB5dGhvbiAoJ0M6L1VzZXJzL3NreWxlcmxld2lzL2FuYWNvbmRhMy9lbnZzL3JnZWUvcHl0aG9uLmV4ZScpIGhhcyBhbHJlYWR5IGJlZW4gaW5pdGlhbGl6ZWQuIFBsZWFzZSByZXN0YXJ0IHRoZSBSIHNlc3Npb24gaWZcbnlvdSBuZWVkIHRvIGF0dGFjaCByZXRpY3VsYXRlIHRvIGEgZGlmZmVyZW50IHZlcnNpb24gb2YgUHl0aG9uLlxuRXJyb3IgaW4gdXNlX3B5dGhvbihweXRob24sIHJlcXVpcmVkID0gcmVxdWlyZWQpIDogXG4gIGZhaWxlZCB0byBpbml0aWFsaXplIHJlcXVlc3RlZCB2ZXJzaW9uIG9mIFB5dGhvblxuIn0= -->
+<pre><code>ERROR: The requested version of Python (&#39;C:\Users\skylerlewis\AppData\Local\r-miniconda\envs\rgee/python.exe&#39;) cannot be used, as another
+version of Python (&#39;C:/Users/skylerlewis/anaconda3/envs/rgee/python.exe&#39;) has already been initialized. Please restart the R session if
+you need to attach reticulate to a different version of Python.
+Error in use_python(python, required = required) : 
+  failed to initialize requested version of Python</code></pre>
 <!-- rnb-output-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxueHNfYiAlPiUgY2FsY194cyh3YXRlcl9lbGV2ID0gMzY1KVxuYGBgIn0= -->
-<pre class="r"><code>xs_b %&gt;% calc_xs(water_elev = 365)</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjpbInRibF9kZiIsInRibCIsImRhdGEuZnJhbWUiXSwibnJvdyI6MSwibmNvbCI6Niwic3VtbWFyeSI6eyJBIHRpYmJsZSI6WyIxIMOXIDYiXX19LCJyZGYiOiJINHNJQUFBQUFBQUFCbVZSelVyRFFCRGVwazIxZ2RhSzFiNkQwSUQwNGtVUUViMktLUFFXeG1UYkJOTWs3bTZhNmtuZlFDK0NaMDllZkFjRnIrSk52T2xiNktWMWt1d0dpUU83Tzk4M3Z4OTd1RHZvR3dPREVGSWxOVTBqVlIxZG9oOGY3ZlUyQ1RJSUtxUkdHdWs3eGFRVmRPcDRXaW14SGYvc1AzWXV2Z284ZVNQU2NyeitibXhGOTU4RnZ1dUdCNnRYdHdVK3UzbCtlbDNzRjNqdDQrRjc1K1c2TkZnUFlFdzVPdTFzZUU0dUN4ZjhoSTRzNnRNSkNDOE1aS0NiZ0tETTRqRWJnazMvaFJ0am1Gb09qWVFyaVk3TlFzNHRUdTAwQzN3TEdBVVpheWRVQ09wWUVXWGVtR0pieGJ2bkRvUFk5MnlMZ2VQRnZMUnhnNFdKcWJadTR0RXU4WnFqbGFYWlBuQWxUWkdHQXdMTUljTjZSTE5TeVVJWXBZdGlrWloraGw0cXJyQVNzUlFINlNaT3ozYmo0TFMza1E3SXdyazFwVi81NDlmemtkcGN0dEpscXpvTlJsNUExZTQrbkZCZmdoWXF6Z1NiRWZNQ29aUWd5MDBSQ2xCNWhoMzZpc20wa2RrditYRHJxSU1DQUFBPSJ9 -->
-<div data-pagedtable="false">
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":["thalweg_elevation"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["water_surface_elevation"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["max_depth"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["cross_sectional_area"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["wetted_perimeter"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["hydraulic_radius"],"name":[6],"type":["dbl"],"align":["right"]}],"data":[{"1":"351.58","2":"365","3":"13.42","4":"1605.859","5":"281.11","6":"5.712562"}],"options":{"columns":{"min":{},"max":[10],"total":[6]},"rows":{"min":[10],"max":[10],"total":[1]},"pages":{}}}
-  </script>
-</div>
-<!-- rnb-frame-end -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuXG4jIGV4YW1wbGUgdG8gZ2VuZXJhdGUgYSByYXRpbmcgY3VydmVcbndhdGVyX2VsZXZzIDwtIDM1MjozNzBcbnJhdGluZ19jdXJ2ZSA8LSB3YXRlcl9lbGV2cyAlPiUgbWFwX2RmKGFwcGx5X3dhdGVyX2VsZXZfdG9feHMsIHhzID0geHNfYilcbnJhdGluZ19jdXJ2ZSAlPiUgZ2dwbG90KGFlcyh4ID0gbWF4X2RlcHRoLCB5ID0gaHlkcmF1bGljX3JhZGl1cykpICsgZ2VvbV9saW5lKClcblxuYGBgIn0= -->
-<pre class="r"><code>
-# example to generate a rating curve
-water_elevs &lt;- 352:370
-rating_curve &lt;- water_elevs %&gt;% map_df(apply_water_elev_to_xs, xs = xs_b)
-rating_curve %&gt;% ggplot(aes(x = max_depth, y = hydraulic_radius)) + geom_line()
-</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-plot-begin eyJoZWlnaHQiOjQzMi42MzI5LCJ3aWR0aCI6NzAwLCJzaXplX2JlaGF2aW9yIjowLCJjb25kaXRpb25zIjpbWzEsIldhcm5pbmc6IFx1MDAxYlszODs1OzI0Nm1SZW1vdmVkIDEgcm93IGNvbnRhaW5pbmcgbWlzc2luZyB2YWx1ZXMgKGBnZW9tX2xpbmUoKWApLlx1MDAxYlszOW0iXV19 -->
-<p><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnUAAAGFCAMAAACsU/XiAAAAxlBMVEUAAAAAADoAAGYAOpAAZmYAZrYzMzM6AAA6ADo6AGY6kJA6kLY6kNtNTU1NTW5NTY5Nbm5NbqtNjshmAABmADpmAGZmZmZmkJBmtv9uTU1uTW5uTY5ubqtuq+SOTU2OTW6OTY6Ojm6Oq6uOyP+QOgCQOjqQkGaQtpCQ2/+rbk2rbm6rbo6r5P+2ZgC2tma2///Ijk3I/8jI///bkDrb25Db///kq27k////tmb/yI7/25D/5Kv/5OT//7b//8j//9v//+T////t0SVfAAAACXBIWXMAAA05AAANOQGumz/oAAAMpElEQVR4nO3dC1fbyBmAYSUUJ2lx24W0Jd3Q3Ra2JWloaCiGQLno//+plWwMkmXd7NHou7zPObvJSbTOaOZdyZIvSVIgtmTsAcAhqkN8VIf4qA7xUR3i61IdZSIsqkN8VIf4qA7xUR3iozrER3WIj+oQH9UhPqpDfFSH+KgO8VEd4qstajad7rdtA2ykrqjbj1ePn46btwE201Td5y/N2wCbqS3q9sPv59FNJhOqQ1h1RX3/gTMs6mxbRN1/PzvKytsP82fAmK2DaDjWpedHgf4QmLJ9D7WPcM6dE6wVIAfuEqOfEDVQHXoJEgPVoYckTAtUh+5ClUB16CxYCFSHrsJ1QHXoKGAGVIduQlZAdegkaARUhy7CNkB16CBwAlSHdqELoDq0Ch4A1aFN+PWnOrQYYPmpDs2GWH2qQ5NAbzJZfdRA28CkgZae6lBvqJWnOtQabOGpDnWGW3eqQ40Bl53qsN6Qq051WGeYOybPjx5oG1gybHNUh6qhm6M6rEiGb47qUBIjuZTqUBCpOarDUpRT6/LPCrQNdIuYXEp1yMVtjuoQvzmqcy/m07mXPzTQNlBpjORSqnNtpOaozrHRmqM6v8ZcVapzatRFpTqfxl1TqnNp5CWlOo/GXlGqc2j0BaU6f8ZfT6pzR8ByUp03ElaT6pwRsZhU54uMtaQ6V4QsJdV5ImUlqc4RMQtJdX7IWUeqc0PQMlKdF5JWkeqcELWIVOeDrDWkOheELSHVeSBtBanOAXELSHX2yVs/qjNP4PJRnXUSV4/qjBO5eFRnm8y1ozrThC4d1VkmdeWozq4Rv7SpBdWZJXjZqM4ouQe6lOqskr1mVGeS8CWjOoNEn11zteObTaf7bdtAJPnrVTfC249Xj5+Om7eBROIPdGl9UbOj9m0gkIrFqhvk+T8+LM6wk8lExY4gp+FAlzZU98NVes4ZVhktK1Vb3fHLWVbLvrinZqHqBvp9P+VYp4uSs2uu6c7JUds2EETTKnGX2AZFB7qU6oxQtkRUZ4CuA11KdRboWx+qU0/h8lCdcurOrjmq003n2lCdakqXhuo007oyVKeY2oWhOr30rgvVqaV4WahOK82rQnU6qbxN94zqVFK+JFSnkfYVoTqF1C8I1emjfz2oTh0Dy0F12lhYDapTxsRiUJ0uNtaC6lQxshRUp4mVlSjux/XrrxfJq9PGbTAiMwtR2JGHk8O7g8PrncuGbTAiO+tQ2JO796fZ0e7m3deGbTAeQ8tQPtZd7FxecKwTSfebTFaUntdlT+pu3vK8TiJba8A1rArGloDqNLC2AsWriYMk95qrCWnMLUBlh84O27dBVPbmv7JH3DmRxuD0V3bpmjOsLBZnv/q8jjOsKCYnn2tY2WzOPdWJZnTql7t19/6UOyeIhGOdZFZnnuoEMzvxz2fYxemVM6wgdue9uGcXu9m/zvYat0E0hqe9/K7OlNcmxLA866V3dc6PdbyrUwTTk17cuYeT7GndbvM2iMP2nHMNi/ioTiTjU166huXOiRDWZ7z0npP8w7DcORmf+Qkv3zm5+xOfhx2f/fkufx724ZdTqhubg+ku7uLN29PrJOEMOy4Ps801rDAuJrvyiljzNhiYj7ku7uWaDyVWtgG2x6ewRXEy1Tyvk8TLTK/bz+u99m0wADcTTXVy+JlnqhPD0TRTnRSeZpnqhHA1yVSH+KhOBl9zzP06EZxN8cp7TtKL6ksT3qZkBN5muPz+uuzf/H0T8bmbYD6FPT5/81t6zwmfwh6Dw+mtfAq7Gp3HaYnI4+xyDTsyl5PbsNOzo/ZtsCWfc1v/DbG3H6hucE6ntna3Hz//neqG5nVma/d7drQ4w04mE69zMzi3E1v3DbG3H694Xjcwv/Nat+ezaeaoeRtsxfG0cg07Fs+z2vDJRKobkutJrew8fz9sFL7ntLL3vPofQeJ8Siu7z98POzz3E1p9XscZdmjMJ6/+R8d0Ul10zCbfwR4dk5nyHeyxMZc5voM9KqZyju9gj4mZXOA72CNiIp9wDRsP87jEd7BHwzQ+4zvYY2EWX/Ad7JEwiQU8rwslKVv93VHGJBXVBVLJrDFC5+o+rbNuG9Qiq15Kr8POv12H+3X9MUP98E1iATBBPZVeEeObxDbC/PRV+Sax3eZtsIqndP1xDbslJmcDVLcd5mYTpdcm1pxdV7ZBGVOzkdK0XSfJqzXvAGBqa/CUbkOr85ZfUay+CYC5XY952VRp5m7ezJNbvXnC7K7FtGys9LzuqbbVG8VM7zrMyua4ht0MT+m2QXUbYUq2Upy+a95z0hEzsp3yp7Bbt0GOCdkSn9bpjad0W6u8v65lGzAb2+O9xD0xGQFwDVvQ4SMObuZiUFS39Nxbw0dseEoXBtXlag5xq/3Zn4hIqC5tO6k+bcPHC8PxXh0tjcF1dSQ3Er/Vkdx4fFbHk7RxOayO4kbnrjqSE8BbdZb2RS9f1XGgk8FVdWZ2RDtP1VnZD/0cVWdkNyzwU52NvbDBS3VcR0jipDoDu2CJj+r074EtLqpTvwPWeKhO+/jtsV8d1xHymK9O9eCtsl6d5rHbZbw6xUO3zHZ1ekdum+XquI6QynB1Softgd3qdI7aB7PVqRy0F1ar0zhmP2xWx3WEbCarUzdgbyxWp228/hisTtlwPbJXna7R+lS3Ro+fptP9lm1EUjVYr+oWabafhXfcvI1EmsbqV9MqzY7atxFG0VA9a1im+5+/Zf+eTCZ6llLPSH2rX6f7n760biOMmoF6V7tQt3/90rqNMFrGibqVuv3xW+s2wigZJuqX6nyaUXU1oWOUyJm5S6xikFiwUp2GMWLJSHUKhogXNqqTP0IUmahO/ABRZqE66ePDKgvVQRsD1QkfHqr0Vyd7dFhHfXWiB4f1tFcneWyoo7w6wUNDvfGqC/GoRKfTaNUlAT6gT3RKjVXd/DG37I7otBqpuuVDbtMd0ak1TnWFR9y4O6LTa5Tqyg+4WXdEp9gY1VUeb4PuiE6z+NWtTaxvd0SnWvTq6h6s1x9CdLrFrq7+sTof7hK+iVO7yNU1PlSHmhKSsyBudW2P1JgUxZkRtboOD1QTFsWZErO6bo9TyYvizIlYXeeHKURGcSbFq67Po8xTozizolXX9zYwxRkWqzoawotI1REdCuJUR3QoilEdT9FQFqE6msOK4asjOqwavDqiQ8XQ1REdqgaujuiwxrDVER3WGbQ6osNaQ1ZHdFhvwOqIDjUGq44XJFBrqOpoDvUGqo7o0GCY6ogOTQapjujQaIjqiA7NBqiO6NAieHXcMUGr0NXRHNoFro7o0EHY6ogOXQStjujQScjqiA7dhKuOi1d0Faw6mkNnoaojOnQXqCiiQw9hqiM69BGkOqJDLyGqIzr0s3113DFBX1tXR3PobdvqiA79bVkd0WED3AFGfFSH+KgO8VEd4qM6xEd1iK+2qO/T6XHbNsBG6oq6/+nL7Y/fmrcBNlNX1O3Hq8fPX7KfTCYTqkNYdUV930/T8+PmbYDNUB3iaz3DNmwDbIarCcTHnRPEx11ixNepupJJIpDEQTGmqh7VlU16/xcRSBwUY6pFdYNhTLV4zob4qA7xUR3iozrER3WIr291hZcs5DifTv/wbexBlNz//E3cXM3HJGOqelZXfHlWjOe3KYhx/7dsaYXN1XxMQqaqZ3XFt6KIIWlt5x7//d/suCJrrp7GJGOqelZXfNudGN//+GG6P/YgyvKzmbS5mo9JxlRZqC79/1U6kzUoqdUJmSoLZ9jc7GjsEZTcizvDPlWXipgqC1cT+UFFwP/ARfkKS5ur5fFXwFRZuXMy/v+/JZLvnAiYKu4SIz6qQ3xUh/ioDvFRHeKjOsRHdSHdvT+t/uLNu6/xRyIb1YVUqS4vjuoqqC4kquuG6rp6OPnLm2T3JvsnTa+TJPvh4tVpevNmb7lB9ou/yaq7O0hef00ffvlntkn281enN+/+kySHYw5dHKrr6uFk5/LuYOfy5u3p3cFhep0ld7abnj1Hl/9i1uHDSfbDzuXDyeuvdwd782Pdm930+jXHuwKq6yrPaflPujiZPpz8eedy+fvX2U+zX8w7y36Yb3WxO6/u7Sln2TKq66pYXXaezU6d+Un15cx58VRd9lvJ4pCXhfi/p+d1VFdCdV0VqsuPXvmx7u79v15qKhzrnrZeHuuobhXVdVWoLn+WdpYfz/bmR7iFwvO6rLHFs8DD5dmV6kqorqtCdQ8nSfK7k8Oz/Oh2sLvcIDu3/nZxDftq/pQvSfayH5JDqqugumE8XXNgLaobBtU1obptzS9aF5e0BVTXhOoQH9UhPqpDfFSH+KgO8VEd4vsVIJC8EnE/0VYAAAAASUVORK5CYII=" /></p>
-<!-- rnb-plot-end -->
 <!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>Earth Engine routines using GEE Python API</p>
+<!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjpbInRibF9kZiIsInRibCIsImRhdGEuZnJhbWUiXSwibnJvdyI6MiwibmNvbCI6Nywic3VtbWFyeSI6eyJBIHRpYmJsZSI6WyIyIMOXIDciXX19LCJyZGYiOiJINHNJQUFBQUFBQUFCbVdSUFVqRFFCVEh6N1F4TmxnL3NPcnFMTFJRWFZ5RUlLS3JpRUp4Q1dmeWFvTnBFdTh1clFxQ0xzNjZDTTVPTHE3cXFDQTZpWnVJRHVybTZLWkw2MTE3VjBvOE9ONTd2L2R4NzU4c3o1ZW16WktKRUVxaHRLYWhsTTVkcEsrdUxPUm5FQ2M4NkVGcGxCRjJteGVOY01mZ2Q0QmZ6WXAvRnk5eXV4L0tkbmh0WDB4QlZ1MEp5ZFBtRTgvbWJIVDJiazIyYllmdmZhNWRQZDkvV2FmajRkTG93VW1IdTVmRjEvN2ZmbXZyK1BibXNXKzZ3NDNjMi9maDlZTTE5bkwrTTNkM3hObVE0SEpSblFGbHhlNWdLaUZGRDNBVnFHd3pKQnhtRmV6WFljTUdIMnFZZVdFZ0UrTjF6SURZTkNabDdNQy9kS2FLdDIwWElsYVJJT2VRa0ZLYmdpT3FzRzlqQWxqbWh1ckFHTGgyQk1TckFoK3JlR1hISlRqMlBjY20yUFZpS25rNkNCa2t0cytRc0Y1UUNySkN1UGpjeldhemtaVHArSmdxbVFxYUxtYTRVQ2E4bjBmSkZpT014Tks4U1JPL1drODA5NUFFR0l3RHNZbWJkeXB4c0prdmlnZGE2ZmJKU2wvcjhvMzJrMXBUanRMbHFGNElOcndBMU80K1hnZGZCZ05jY1V0d0lTSmV3SlFTVG1tQmhReXJPdE1KZlVWYTJsRGpENFJ4T0t2aEFnQUEifQ== -->
-<div data-pagedtable="false">
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":["thalweg_elevation"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["water_surface_elevation"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["max_depth"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["cross_sectional_area"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["wetted_perimeter"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["hydraulic_radius"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["note"],"name":[7],"type":["chr"],"align":["left"]}],"data":[{"1":"351.58","2":"360","3":"8.42","4":"478.1471","5":"165.7248","6":"2.885187","7":"test1"},{"1":"351.58","2":"365","3":"13.42","4":"1605.8587","5":"281.1100","6":"5.712562","7":"test2"}],"options":{"columns":{"min":{},"max":[10],"total":[7]},"rows":{"min":[10],"max":[10],"total":[2]},"pages":{}}}
-  </script>
-</div>
-<!-- rnb-frame-end -->
-<!-- rnb-chunk-end -->
-<!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxueHNfYiA8LSByZWFkX2NzdihcImRhdGEveHNfZ2VvbS94c19iLmNzdlwiKSAlPiVcbiAgcHJlcF94cyhzdGEgPSBzdGF0aW9uX2xlZnRfYmFua19mdCwgZWxldiA9IGVsZXZhdGlvbl9uZ3ZkMjlfZnQsIGRlbHRhX3ggPSAwLjEpICU+JVxuICBtdXRhdGUoY3Jvc3Nfc2VjdGlvbiA9IFwiQlwiKVxuXG54c19kIDwtIHJlYWRfY3N2KFwiZGF0YS94c19nZW9tL3hzX2QuY3N2XCIpICU+JVxuICBwcmVwX3hzKHN0YSA9IHN0YXRpb25fbGVmdF9iYW5rX2Z0LCBlbGV2ID0gZWxldmF0aW9uX25ndmQyOV9mdCwgZGVsdGFfeCA9IDAuMSkgJT4lXG4gIG11dGF0ZShjcm9zc19zZWN0aW9uID0gXCJEXCIpXG5cbnhzX2UgPC0gcmVhZF9jc3YoXCJkYXRhL3hzX2dlb20veHNfZS5jc3ZcIikgJT4lXG4gIHByZXBfeHMoc3RhID0gc3RhdGlvbl9sZWZ0X2JhbmtfZnQsIGVsZXYgPSBlbGV2YXRpb25fbmd2ZDI5X2Z0LCBkZWx0YV94ID0gMC4xKSAlPiVcbiAgbXV0YXRlKGNyb3NzX3NlY3Rpb24gPSBcIkVcIilcblxueHNfZiA8LSByZWFkX2NzdihcImRhdGEveHNfZ2VvbS94c19mLmNzdlwiKSAlPiVcbiAgcHJlcF94cyhzdGEgPSBzdGF0aW9uX2xlZnRfYmFua19mdCwgZWxldiA9IGVsZXZhdGlvbl9uZ3ZkMjlfZnQsIGRlbHRhX3ggPSAwLjEpICU+JVxuICBtdXRhdGUoY3Jvc3Nfc2VjdGlvbiA9IFwiRlwiKVxuXG54c19nIDwtIHJlYWRfY3N2KFwiZGF0YS94c19nZW9tL3hzX2cuY3N2XCIpICU+JVxuICBwcmVwX3hzKHN0YSA9IHN0YXRpb25fbGVmdF9iYW5rX2Z0LCBlbGV2ID0gZWxldmF0aW9uX25ndmQyOV9mdCwgZGVsdGFfeCA9IDAuMSkgJT4lXG4gIG11dGF0ZShjcm9zc19zZWN0aW9uID0gXCJHXCIpXG5cbnhzX2ggPC0gcmVhZF9jc3YoXCJkYXRhL3hzX2dlb20veHNfaC5jc3ZcIikgJT4lXG4gIHByZXBfeHMoc3RhID0gc3RhdGlvbl9sZWZ0X2JhbmtfZnQsIGVsZXYgPSBlbGV2YXRpb25fbmd2ZDI5X2Z0LCBkZWx0YV94ID0gMC4xKSAlPiVcbiAgbXV0YXRlKGNyb3NzX3NlY3Rpb24gPSBcIkhcIilcblxueHMgPC0gYmluZF9yb3dzKHhzX2IsIHhzX2QsIHhzX2UsIHhzX2YsIHhzX2csIHhzX2gpXG5cbnhzICU+JSBcbiAgZ3JvdXBfYnkoY3Jvc3Nfc2VjdGlvbikgJT4lXG5cbmBgYCJ9 -->
-<pre class="r"><code>xs_b &lt;- read_csv(&quot;data/xs_geom/xs_b.csv&quot;) %&gt;%
-  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) %&gt;%
-  mutate(cross_section = &quot;B&quot;)
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgcHl0aG9uXG5pbXBvcnQgZWUgICAgICAgXG4jZWUuQXV0aGVudGljYXRlKClcbmVlLkluaXRpYWxpemUodXNlciA9ICdza3lsZXJsZXdpc0BiZXJrZWxleS5lZHUnKSMsIGRyaXZlID0gVCwgZ2NzID0gVClcbnByaW50KGVlLl9fdmVyc2lvbl9fKVxuXG5cbmVlX2luc3RhbGwoKVxuYGBgIn0= -->
+<pre class="python"><code>import ee       
+#ee.Authenticate()
+ee.Initialize(user = &#39;skylerlewis@berkeley.edu&#39;)#, drive = T, gcs = T)
+print(ee.__version__)
 
-xs_d &lt;- read_csv(&quot;data/xs_geom/xs_d.csv&quot;) %&gt;%
-  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) %&gt;%
-  mutate(cross_section = &quot;D&quot;)
 
-xs_e &lt;- read_csv(&quot;data/xs_geom/xs_e.csv&quot;) %&gt;%
-  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) %&gt;%
-  mutate(cross_section = &quot;E&quot;)
-
-xs_f &lt;- read_csv(&quot;data/xs_geom/xs_f.csv&quot;) %&gt;%
-  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) %&gt;%
-  mutate(cross_section = &quot;F&quot;)
-
-xs_g &lt;- read_csv(&quot;data/xs_geom/xs_g.csv&quot;) %&gt;%
-  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) %&gt;%
-  mutate(cross_section = &quot;G&quot;)
-
-xs_h &lt;- read_csv(&quot;data/xs_geom/xs_h.csv&quot;) %&gt;%
-  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) %&gt;%
-  mutate(cross_section = &quot;H&quot;)
-
-xs &lt;- bind_rows(xs_b, xs_d, xs_e, xs_f, xs_g, xs_h)
-
-xs %&gt;% 
-  group_by(cross_section) %&gt;%
-</code></pre>
+ee_install()</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjpbInNwZWNfdGJsX2RmIiwidGJsX2RmIiwidGJsIiwiZGF0YS5mcmFtZSJdLCJucm93IjoxNiwibmNvbCI6NSwic3VtbWFyeSI6eyJBIHRpYmJsZSI6WyIxNiDDlyA1Il19fSwicmRmIjoiSDRzSUFBQUFBQUFBQmd0eWlURG1pdUJpWUdCZ1ptQmhZbUpnWmdVeUdWaERROXgwTFJpQUlrQU9Jd01MQXllSXJnQXFFZ2JKQXJFQUdFTWsySk16RXZQeVVuT296K1ZLeThuUFR5bklTY3pNR3dJaXFLSEM2QVJqdU1BWXJqQ0dHNHpoRG1ONEVLRUxVenVtT1pnR2VnQmpqUS9rTG9lTHJhQzRaY0NnTDkwNmdFTER4Wjg3WUtkZkhTQ0hqNWFjV0pOekVvdUxvWUVHRTJSeFNTeEpCZEwvZ0JqaTZETHJWcmtkZ1c4Y3lrUVA5Y2RvZkhNby9hUHhGY2h5S0YzNkdpZ1I1RkRhQXVKcU9wUVdHNE9BUTlsWmlMcXlTWDgvYjNOZDVGRG1CRkZmNXAvZzJHbnU0MUFtN3I1T3BPcWhRNW5zeEl5aURZb09wUStnK2wveWhiRklUSFlvM1JBbHM0YkQwS0YwbStldU9GTjdtRHZzT3lhWDdNbXErMlZmVXZVUWFFQzFmUWFVajR1dVY5UXROK3cvYWg4UHBjcytzUFh1MkhYY3Z2SWNlM3orSlFYNzJtZXpydWpZekxldjJ4RUk4b2g5UTVMdnBZOHIvOWpYZDNFeTNXTzRaSjkwdlZqaVQ0QUhURDk2NE9VbDVxYkNBbzhWS3NoV25GcVVDUlNGOEhpVGkvS0xpK09MVTVOTE12Tmh5Wld2SURVeE94Nllac3ZqVTBBaERWV2FVWjRibjVxVFdwYUlwSlMxT0NlL0lCWE5YczZpL0hJOW1OMjhRTXpVQUNUKy8vLy9BYUtRNlQ5YWhISUJyVW5VU3lzQ2FvRkVLNHB4N1BrRklCdUJoakVoRnl6d0VxY0lUWUMvTkE5a2VZcHVja1pwWHJhdU1jZ0NzRFFFOEVMWkFraHNWb2lWekRDSHdRTXJOUzg5TXc4V0FxdzVpVW53VW9jUDZFbXdIL1VLaWpMelNtQStBWW9XNjVYa2x5VENTNmZrL0J5WUNDVEovZ01BMExkQmowOEZBQUE9In0= -->
-<div data-pagedtable="false">
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":["series"],"name":[1],"type":["chr"],"align":["left"]},{"label":["cross_section"],"name":[2],"type":["chr"],"align":["left"]},{"label":["peak_flow_date"],"name":[3],"type":["date"],"align":["right"]},{"label":["hwm_elevation"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["slope"],"name":[5],"type":["dbl"],"align":["right"]}],"data":[{"1":"channel","2":"B","3":"2019-02-13","4":"355.720","5":"0.0120"},{"1":"channel","2":"D","3":"2019-02-13","4":"353.360","5":"0.0050"},{"1":"channel","2":"E","3":"2019-02-13","4":"351.760","5":"0.0030"},{"1":"channel","2":"F","3":"2022-11-11","4":"346.370","5":"0.0030"},{"1":"channel","2":"G","3":"2022-11-11","4":"344.310","5":"0.0030"},{"1":"channel","2":"H","3":"2019-02-13","4":"343.200","5":"0.0030"},{"1":"floodplain","2":"B","3":"2022-12-31","4":"364.860","5":"0.0076"},{"1":"floodplain","2":"D","3":"2022-12-31","4":"361.187","5":"0.0019"},{"1":"floodplain","2":"E","3":"2022-12-31","4":"356.135","5":"0.0056"},{"1":"floodplain","2":"E","3":"2023-01-14","4":"356.961","5":"0.0063"},{"1":"floodplain","2":"F","3":"2022-12-31","4":"353.455","5":"0.0073"},{"1":"floodplain","2":"F","3":"2023-01-14","4":"353.848","5":"0.0075"},{"1":"floodplain","2":"G","3":"2022-12-31","4":"350.060","5":"0.0080"},{"1":"floodplain","2":"G","3":"2023-01-14","4":"350.566","5":"0.0077"},{"1":"floodplain","2":"H","3":"2022-12-31","4":"347.022","5":"0.0023"},{"1":"floodplain","2":"H","3":"2023-01-14","4":"347.393","5":"0.0019"}],"options":{"columns":{"min":{},"max":[10],"total":[5]},"rows":{"min":[10],"max":[10],"total":[16]},"pages":{}}}
-  </script>
-</div>
-<!-- rnb-frame-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgcHl0aG9uXG50YXNzYWphcmFfcGVyaW0gPSBlZS5GZWF0dXJlQ29sbGVjdGlvbihcImRhdGEvdGFzc2FqYXJhX3BlcmltLmdlb2pzb25cIik7XG5gYGAifQ== -->
+<pre class="python"><code>tassajara_perim = ee.FeatureCollection(&quot;data/tassajara_perim.geojson&quot;);</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
-</div>
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgcHl0aG9uXG5cbmRlZiBhcHBseVNjYWxlRmFjdG9yc0w1KGltYWdlKTpcbiAgb3B0aWNhbEJhbmRzID0gaW1hZ2Uuc2VsZWN0KCdTUl9CLicpLm11bHRpcGx5KDAuMDAwMDI3NSkuYWRkKC0wLjIpXG4gIHRoZXJtYWxCYW5kID0gaW1hZ2Uuc2VsZWN0KCdTVF9CNicpLm11bHRpcGx5KDAuMDAzNDE4MDIpLmFkZCgxNDkuMClcbiAgcmV0dXJuIChpbWFnZS5hZGRCYW5kcyhvcHRpY2FsQmFuZHMsIG51bGwsIHRydWUpXG4gICAgICAgICAgICAgIC5hZGRCYW5kcyh0aGVybWFsQmFuZCwgbnVsbCwgdHJ1ZSkpXG5cbmRlZiBhcHBseU5kdmlMNShpbWFnZSk6XG4gIG5kdmkgPSBlZS5JbWFnZShpbWFnZSkubm9ybWFsaXplZERpZmZlcmVuY2UoWydTUl9CNCcsICdTUl9CMyddKVxuICByZXR1cm4gZWUuSW1hZ2UoaW1hZ2UpLmFkZEJhbmRzKG5kdmkpXG5cbiMgZ2V0IExhbmRzYXQgNSB0aHJvdWdoIGVuZCBvZiBTZXB0ZW1iZXIgMjAxM1xubGFuZHNhdDUgPSAoZWUuSW1hZ2VDb2xsZWN0aW9uKFwiTEFORFNBVC9MVDA1L0MwMi9UMV9MMlwiKVxuICAgIC5maWx0ZXJCb3VuZHModGFzc2FqYXJhX3BlcmltKVxuICAgIC5maWx0ZXJEYXRlKCcxOTg0LTAxLTAxJywgJzIwMTEtMDktMzAnKVxuICAgIC5maWx0ZXJNZXRhZGF0YSgnQ0xPVURfQ09WRVJfTEFORCcsICdsZXNzX3RoYW4nLCAyMClcbiAgICAubWFwKGFwcGx5U2NhbGVGYWN0b3JzTDUpXG4gICAgLm1hcChhcHBseU5kdmlMNSkpXG5cbmRlZiBhcHBseVNjYWxlRmFjdG9yc0w3KGltYWdlKTpcbiAgb3B0aWNhbEJhbmRzID0gaW1hZ2Uuc2VsZWN0KCdTUl9CLicpLm11bHRpcGx5KDAuMDAwMDI3NSkuYWRkKC0wLjIpXG4gIHRoZXJtYWxCYW5kID0gaW1hZ2Uuc2VsZWN0KCdTVF9CNicpLm11bHRpcGx5KDAuMDAzNDE4MDIpLmFkZCgxNDkuMClcbiAgcmV0dXJuIChpbWFnZS5hZGRCYW5kcyhvcHRpY2FsQmFuZHMsIG51bGwsIHRydWUpXG4gICAgICAgICAgICAgIC5hZGRCYW5kcyh0aGVybWFsQmFuZCwgbnVsbCwgdHJ1ZSkpXG5cbiMgZ2V0IExhbmRzYXQgNyBmb3IganVzdCB0aGUgaW50ZXJpbSBwZXJpb2RcbmxhbmRzYXQ3ID0gKGVlLkltYWdlQ29sbGVjdGlvbignTEFORFNBVC9MRTA3L0MwMi9UMV9MMicpXG4gICAgLmZpbHRlckJvdW5kcyh0YXNzYWphcmFfcGVyaW0pXG4gICAgLmZpbHRlckRhdGUoJzIwMTEtMTAtMDEnLCAnMjAxMy0wMy0zMScpXG4gICAgLmZpbHRlck1ldGFkYXRhKCdDTE9VRF9DT1ZFUl9MQU5EJywgJ2xlc3NfdGhhbicsIDIwKVxuICAgIC5tYXAoYXBwbHlTY2FsZUZhY3RvcnNMNylcbiAgICAubWFwKGFwcGx5TmR2aUw1KSkgIyBjYW4gdXNlIHNhbWUgZnVuY3Rpb24gYXMgTGFuZHNhdCA1XG5cbmRlZiBhcHBseVNjYWxlRmFjdG9yc0w4KGltYWdlKTpcbiAgb3B0aWNhbEJhbmRzID0gaW1hZ2Uuc2VsZWN0KCdTUl9CLicpLm11bHRpcGx5KDAuMDAwMDI3NSkuYWRkKC0wLjIpXG4gIHRoZXJtYWxCYW5kcyA9IGltYWdlLnNlbGVjdCgnU1RfQi4qJykubXVsdGlwbHkoMC4wMDM0MTgwMikuYWRkKDE0OS4wKVxuICByZXR1cm4gKGltYWdlLmFkZEJhbmRzKG9wdGljYWxCYW5kcywgbnVsbCwgdHJ1ZSlcbiAgICAgICAgICAgICAgLmFkZEJhbmRzKHRoZXJtYWxCYW5kcywgbnVsbCwgdHJ1ZSkpXG5cbmRlZiBhcHBseU5kdmlMOChpbWFnZSk6XG4gIG5kdmkgPSBlZS5JbWFnZShpbWFnZSkubm9ybWFsaXplZERpZmZlcmVuY2UoWydTUl9CNScsICdTUl9CNCddKVxuICByZXR1cm4gZWUuSW1hZ2UoaW1hZ2UpLmFkZEJhbmRzKG5kdmkpXG5cbiMgZ2V0IExhbmRzYXQgOCBzdGFydGluZyBBcHJpbCAyMDEzXG5sYW5kc2F0OCA9IChlZS5JbWFnZUNvbGxlY3Rpb24oXCJMQU5EU0FUL0xDMDgvQzAyL1QxX0wyXCIpXG4gICAgLmZpbHRlckJvdW5kcyh0YXNzYWphcmFfcGVyaW0pXG4gICAgLmZpbHRlckRhdGUoJzIwMTMtMDQtMDEnLCAnMjAyMy0xMi0zMScpXG4gICAgLmZpbHRlck1ldGFkYXRhKCdDTE9VRF9DT1ZFUl9MQU5EJywgJ2xlc3NfdGhhbicsIDIwKVxuICAgIC5tYXAoYXBwbHlTY2FsZUZhY3RvcnNMOClcbiAgICAubWFwKGFwcGx5TmR2aUw4KSlcbiAgICBcbmBgYCJ9 -->
+<pre class="python"><code>
+def applyScaleFactorsL5(image):
+  opticalBands = image.select(&#39;SR_B.&#39;).multiply(0.0000275).add(-0.2)
+  thermalBand = image.select(&#39;ST_B6&#39;).multiply(0.00341802).add(149.0)
+  return (image.addBands(opticalBands, null, true)
+              .addBands(thermalBand, null, true))
 
-<div id="rmd-source-code">LS0tDQp0aXRsZTogIlIgTm90ZWJvb2siDQpvdXRwdXQ6IGh0bWxfbm90ZWJvb2sNCi0tLQ0KDQpgYGB7ciBpbmNsdWRlPUZBTFNFfQ0KbGlicmFyeSh0aWR5dmVyc2UpDQpnZ3Bsb3QyOjp0aGVtZV9zZXQodGhlbWVfY2xhc3NpYygpKQ0KYGBgDQoNCiMgaW5pdGlhbCB0ZXN0cyBhbmQgZGV2DQoNCmBgYHtyfQ0KaHdtIDwtIDM2NQ0KZGVsdGFfeCA8LSAwLjENCg0KeHMgPC0gcmVhZF9jc3YoImRhdGEveHNfZ2VvbS94c19iLmNzdiIpICU+JSANCiAgYXJyYW5nZShzdGF0aW9uX2xlZnRfYmFua19mdCkgJT4lDQogIGNvbXBsZXRlKHN0YXRpb25fbGVmdF9iYW5rX2Z0ID0gc2VxKGZyb20gPSBtaW4oc3RhdGlvbl9sZWZ0X2JhbmtfZnQpLCB0byA9IG1heChzdGF0aW9uX2xlZnRfYmFua19mdCksIGJ5ID0gZGVsdGFfeCkpICU+JQ0KICBtdXRhdGUoZ3NlID0gem9vOjpuYS5hcHByb3goZWxldmF0aW9uX25ndmQyOV9mdCwgeCA9IHN0YXRpb25fbGVmdF9iYW5rX2Z0KSkgJT4lIA0KICBtdXRhdGUod3NlID0gY2FzZV93aGVuKGh3bSA+PSBnc2UgfiBod20pKQ0KDQp4cyAlPiUgZ2dwbG90KGFlcyh4ID0gc3RhdGlvbl9sZWZ0X2JhbmtfZnQpKSArIA0KICBnZW9tX2xpbmUoYWVzKHkgPSBnc2UpKSArIA0KICBnZW9tX2xpbmUoYWVzKHkgPSB3c2UpKQ0KYGBgDQoNCmBgYHtyfQ0KeHMgJT4lIA0KICBtdXRhdGUoZGVsdGFfeiA9IGxhZyhnc2UsIDEpIC0gZ3NlKSAlPiUNCiAgZmlsdGVyKCFpcy5uYSh3c2UpKSAlPiUgDQogIHN1bW1hcml6ZShjcm9zc19zZWN0aW9uYWxfYXJlYSA9IGh3bSAqIChtYXgoc3RhdGlvbl9sZWZ0X2JhbmtfZnQpIC0gbWluKHN0YXRpb25fbGVmdF9iYW5rX2Z0KSkNCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgLSBzdW0oZGVsdGFfeCAqIHpvbzo6cm9sbGFwcGx5KGdzZSwgMiwgbWVhbikpLA0KICAgICAgICAgICAgd2V0dGVkX3BlcmltZXRlciA9IHN1bShzcXJ0KGRlbHRhX3heMiArIGRlbHRhX3peMikpLA0KICAgICAgICAgICAgaHlkcmF1bGljX3JhZGl1cyA9IGNyb3NzX3NlY3Rpb25hbF9hcmVhIC8gd2V0dGVkX3BlcmltZXRlciwNCiAgICAgICAgICAgICkNCmBgYA0KIyBhcyBmdW5jdGlvbnMNCg0KYGBge3J9DQoNCnByZXBfeHMgPC0gZnVuY3Rpb24oZGF0YSwgc3RhLCBlbGV2LCBkZWx0YV94KSB7DQogIGRhdGEgJT4lDQogICAgYXJyYW5nZSh7e3N0YX19KSAlPiUNCiAgICBtdXRhdGUoc3RhID0ge3tzdGF9fSkgJT4lDQogICAgY29tcGxldGUoc3RhID0gc2VxKGZyb20gPSBtaW4oe3tzdGF9fSksIHRvID0gbWF4KHt7c3RhfX0pLCBieSA9IGRlbHRhX3gpKSAlPiUNCiAgICBtdXRhdGUoZ3NlID0gem9vOjpuYS5hcHByb3goe3tlbGV2fX0sIHggPSBzdGEpKSAlPiUgDQogICAgc2VsZWN0KGMoc3RhLCBnc2UpKQ0KfQ0KDQpjYWxjX3hzIDwtIGZ1bmN0aW9uKGRhdGEsIHdhdGVyX2VsZXYpIHsNCiAgZGF0YSAlPiUgDQogICAgbXV0YXRlKHdzZSA9IGNhc2Vfd2hlbih3YXRlcl9lbGV2ID49IGdzZSB+IHdhdGVyX2VsZXYpKSAlPiUNCiAgICBtdXRhdGUoZGVsdGFfeCA9IGFicyhsYWcoc3RhLCAxKSAtIHN0YSksDQogICAgICAgICAgIGRlbHRhX3ogPSBhYnMobGFnKGdzZSwgMSkgLSBnc2UpLA0KICAgICAgICAgICBkZXB0aCA9IHdzZSAtIGdzZSwgDQogICAgICAgICAgIGh5cF9sZW5ndGggPSBzcXJ0KGRlbHRhX3heMiArIGRlbHRhX3peMikNCiAgICAgICAgICAgKSAlPiUNCiAgICBmaWx0ZXIoIWlzLm5hKHdzZSkpICU+JSANCiAgICBzdW1tYXJpemUodGhhbHdlZ19lbGV2YXRpb24gPSBtaW4oZ3NlKSwNCiAgICAgICAgICAgICAgd2F0ZXJfc3VyZmFjZV9lbGV2YXRpb24gPSB3YXRlcl9lbGV2LA0KICAgICAgICAgICAgICBtYXhfZGVwdGggPSB3YXRlcl9zdXJmYWNlX2VsZXZhdGlvbiAtIHRoYWx3ZWdfZWxldmF0aW9uLA0KICAgICAgICAgICAgICBjcm9zc19zZWN0aW9uYWxfYXJlYSA9IHN1bShkZWx0YV94ICogZGVwdGgpLA0KICAgICAgICAgICAgICB3ZXR0ZWRfcGVyaW1ldGVyID0gc3VtKGh5cF9sZW5ndGgpLA0KICAgICAgICAgICAgICBoeWRyYXVsaWNfcmFkaXVzID0gY3Jvc3Nfc2VjdGlvbmFsX2FyZWEgLyB3ZXR0ZWRfcGVyaW1ldGVyLA0KICAgICAgICAgICAgICApDQogICMgY2FuIHdlIGNvbnZlcnQgdG8gbmFtZWQgbGlzdD8NCn0NCg0KYXBwbHlfd2F0ZXJfZWxldl90b194cyA8LSBmdW5jdGlvbih3YXRlcl9lbGV2LCB4cykgew0KICBjYWxjX3hzKHhzLCB3YXRlcl9lbGV2KQ0KfQ0KDQpgYGANCg0KYGBge3J9DQp4c19iIDwtIHJlYWRfY3N2KCJkYXRhL3hzX2dlb20veHNfYi5jc3YiKSAlPiUNCiAgcHJlcF94cyhzdGEgPSBzdGF0aW9uX2xlZnRfYmFua19mdCwgZWxldiA9IGVsZXZhdGlvbl9uZ3ZkMjlfZnQsIGRlbHRhX3ggPSAwLjEpDQoNCnhzX2IgJT4lIGNhbGNfeHMod2F0ZXJfZWxldiA9IDM2NSkNCg0KIyBleGFtcGxlIHRvIGdlbmVyYXRlIGEgcmF0aW5nIGN1cnZlDQp3YXRlcl9lbGV2cyA8LSAzNTI6MzcwDQpyYXRpbmdfY3VydmUgPC0gd2F0ZXJfZWxldnMgJT4lIG1hcF9kZihhcHBseV93YXRlcl9lbGV2X3RvX3hzLCB4cyA9IHhzX2IpDQpyYXRpbmdfY3VydmUgJT4lIGdncGxvdChhZXMoeCA9IG1heF9kZXB0aCwgeSA9IGh5ZHJhdWxpY19yYWRpdXMpKSArIGdlb21fbGluZSgpDQoNCmBgYA0KYGBge3J9DQoNCiMgZXhhbXBsZSB0byBjYWxjdWxhdGUgYmFzZWQgb24gbGlzdHMgb2Ygd2F0ZXIgZWxldnMNCmVsZXZzIDwtIHRyaWJibGUoDQogIH5ub3RlLCB+aHdtLA0KICAidGVzdDEiLCAzNjAsDQogICJ0ZXN0MiIsIDM2NQ0KKSANCmVsZXZzICU+JSANCiAgcHVsbChod20pICU+JSANCiAgbWFwX2RmKGFwcGx5X3dhdGVyX2VsZXZfdG9feHMsIHhzID0geHNfYikgJT4lIA0KICBsZWZ0X2pvaW4oZWxldnMsIGJ5ID0gam9pbl9ieSh3YXRlcl9zdXJmYWNlX2VsZXZhdGlvbiA9PSBod20pKQ0KDQpgYGANCmBgYHtyfQ0KeHNfYiA8LSByZWFkX2NzdigiZGF0YS94c19nZW9tL3hzX2IuY3N2IikgJT4lDQogIHByZXBfeHMoc3RhID0gc3RhdGlvbl9sZWZ0X2JhbmtfZnQsIGVsZXYgPSBlbGV2YXRpb25fbmd2ZDI5X2Z0LCBkZWx0YV94ID0gMC4xKSAlPiUNCiAgbXV0YXRlKGNyb3NzX3NlY3Rpb24gPSAiQiIpDQoNCnhzX2QgPC0gcmVhZF9jc3YoImRhdGEveHNfZ2VvbS94c19kLmNzdiIpICU+JQ0KICBwcmVwX3hzKHN0YSA9IHN0YXRpb25fbGVmdF9iYW5rX2Z0LCBlbGV2ID0gZWxldmF0aW9uX25ndmQyOV9mdCwgZGVsdGFfeCA9IDAuMSkgJT4lDQogIG11dGF0ZShjcm9zc19zZWN0aW9uID0gIkQiKQ0KDQp4c19lIDwtIHJlYWRfY3N2KCJkYXRhL3hzX2dlb20veHNfZS5jc3YiKSAlPiUNCiAgcHJlcF94cyhzdGEgPSBzdGF0aW9uX2xlZnRfYmFua19mdCwgZWxldiA9IGVsZXZhdGlvbl9uZ3ZkMjlfZnQsIGRlbHRhX3ggPSAwLjEpICU+JQ0KICBtdXRhdGUoY3Jvc3Nfc2VjdGlvbiA9ICJFIikNCg0KeHNfZiA8LSByZWFkX2NzdigiZGF0YS94c19nZW9tL3hzX2YuY3N2IikgJT4lDQogIHByZXBfeHMoc3RhID0gc3RhdGlvbl9sZWZ0X2JhbmtfZnQsIGVsZXYgPSBlbGV2YXRpb25fbmd2ZDI5X2Z0LCBkZWx0YV94ID0gMC4xKSAlPiUNCiAgbXV0YXRlKGNyb3NzX3NlY3Rpb24gPSAiRiIpDQoNCnhzX2cgPC0gcmVhZF9jc3YoImRhdGEveHNfZ2VvbS94c19nLmNzdiIpICU+JQ0KICBwcmVwX3hzKHN0YSA9IHN0YXRpb25fbGVmdF9iYW5rX2Z0LCBlbGV2ID0gZWxldmF0aW9uX25ndmQyOV9mdCwgZGVsdGFfeCA9IDAuMSkgJT4lDQogIG11dGF0ZShjcm9zc19zZWN0aW9uID0gIkciKQ0KDQp4c19oIDwtIHJlYWRfY3N2KCJkYXRhL3hzX2dlb20veHNfaC5jc3YiKSAlPiUNCiAgcHJlcF94cyhzdGEgPSBzdGF0aW9uX2xlZnRfYmFua19mdCwgZWxldiA9IGVsZXZhdGlvbl9uZ3ZkMjlfZnQsIGRlbHRhX3ggPSAwLjEpICU+JQ0KICBtdXRhdGUoY3Jvc3Nfc2VjdGlvbiA9ICJIIikNCg0KeHMgPC0gYmluZF9yb3dzKHhzX2IsIHhzX2QsIHhzX2UsIHhzX2YsIHhzX2csIHhzX2gpDQoNCnhzICU+JSANCiAgZ3JvdXBfYnkoY3Jvc3Nfc2VjdGlvbikgJT4lDQoNCmBgYA0KDQoNCmBgYHtyfQ0KaHdtX2h5ZHJhdWxpY3MgPC0gcmVhZF9jc3YoImRhdGEvaGlnaF93YXRlcl9tYXJrc192Mi5jc3YiKSAlPiUNCiAgamFuaXRvcjo6Y2xlYW5fbmFtZXMoKQ0KaHdtX2h5ZHJhdWxpY3MNCmBgYA0K</div>
+def applyNdviL5(image):
+  ndvi = ee.Image(image).normalizedDifference([&#39;SR_B4&#39;, &#39;SR_B3&#39;])
+  return ee.Image(image).addBands(ndvi)
+
+# get Landsat 5 through end of September 2013
+landsat5 = (ee.ImageCollection(&quot;LANDSAT/LT05/C02/T1_L2&quot;)
+    .filterBounds(tassajara_perim)
+    .filterDate(&#39;1984-01-01&#39;, &#39;2011-09-30&#39;)
+    .filterMetadata(&#39;CLOUD_COVER_LAND&#39;, &#39;less_than&#39;, 20)
+    .map(applyScaleFactorsL5)
+    .map(applyNdviL5))
+
+def applyScaleFactorsL7(image):
+  opticalBands = image.select(&#39;SR_B.&#39;).multiply(0.0000275).add(-0.2)
+  thermalBand = image.select(&#39;ST_B6&#39;).multiply(0.00341802).add(149.0)
+  return (image.addBands(opticalBands, null, true)
+              .addBands(thermalBand, null, true))
+
+# get Landsat 7 for just the interim period
+landsat7 = (ee.ImageCollection(&#39;LANDSAT/LE07/C02/T1_L2&#39;)
+    .filterBounds(tassajara_perim)
+    .filterDate(&#39;2011-10-01&#39;, &#39;2013-03-31&#39;)
+    .filterMetadata(&#39;CLOUD_COVER_LAND&#39;, &#39;less_than&#39;, 20)
+    .map(applyScaleFactorsL7)
+    .map(applyNdviL5)) # can use same function as Landsat 5
+
+def applyScaleFactorsL8(image):
+  opticalBands = image.select(&#39;SR_B.&#39;).multiply(0.0000275).add(-0.2)
+  thermalBands = image.select(&#39;ST_B.*&#39;).multiply(0.00341802).add(149.0)
+  return (image.addBands(opticalBands, null, true)
+              .addBands(thermalBands, null, true))
+
+def applyNdviL8(image):
+  ndvi = ee.Image(image).normalizedDifference([&#39;SR_B5&#39;, &#39;SR_B4&#39;])
+  return ee.Image(image).addBands(ndvi)
+
+# get Landsat 8 starting April 2013
+landsat8 = (ee.ImageCollection(&quot;LANDSAT/LC08/C02/T1_L2&quot;)
+    .filterBounds(tassajara_perim)
+    .filterDate(&#39;2013-04-01&#39;, &#39;2023-12-31&#39;)
+    .filterMetadata(&#39;CLOUD_COVER_LAND&#39;, &#39;less_than&#39;, 20)
+    .map(applyScaleFactorsL8)
+    .map(applyNdviL8))
+    </code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgcHl0aG9uXG4jIGNvbWJpbmVcblxubmR2aSA9IGxhbmRzYXQ1Lm1lcmdlKGxhbmRzYXQ3KS5tZXJnZShsYW5kc2F0OCkuc2VsZWN0KCduZCcpXG5cbiMgbm93IHJlZHVjZSBieSByZWdpb25cblxuIyB0aGlzIGlzIHRoZSBwYXJ0IHRoYXQgbmVlZHMgdG8gYmUgY2hhbmdlZCBmb3IgcHl0aG9uIG91dHB1dFxuXG50cyA9IENoYXJ0LmltYWdlLnNlcmllc0J5UmVnaW9uKG5kdmksIHRhc3NhamFyYV9wZXJpbSxcbiAgZWUuUmVkdWNlci5tZWFuKCksICduZCcsIDMwLCAnc3lzdGVtOnRpbWVfc3RhcnQnLCAnbmFtZScpXG4gICAgLnNldENoYXJ0VHlwZSgnU2NhdHRlckNoYXJ0JylcbiAgICAuc2V0T3B0aW9ucyh7XG4gICAgICB0aXRsZTogJ1RlbXBvcmFsIHByb2ZpbGVzIE5EVkknLFxuICAgICAgdkF4aXM6IHt0aXRsZTogJ05EVkknfSxcbiAgICAgIGxpbmVXaWR0aDogMSxcbiAgICAgIHBvaW50U2l6ZTogNCxcbiAgICAgIHNlcmllczogeyAvL2VhY2ggY29sb3IgYmVsb3cgaXMgcHJvdmlkZWQgZm9yIGEgZGlmZmVyZW50IHJlZ2lvbiAoZmVhdHVyZSlcbiAgICAgICAgMDoge2NvbG9yOiAnRkYwMDAwJ30sIC8vcmVkXG59fSk7XG5cbmBgYCJ9 -->
+<pre class="python"><code># combine
+
+ndvi = landsat5.merge(landsat7).merge(landsat8).select(&#39;nd&#39;)
+
+# now reduce by region
+
+# this is the part that needs to be changed for python output
+
+ts = Chart.image.seriesByRegion(ndvi, tassajara_perim,
+  ee.Reducer.mean(), &#39;nd&#39;, 30, &#39;system:time_start&#39;, &#39;name&#39;)
+    .setChartType(&#39;ScatterChart&#39;)
+    .setOptions({
+      title: &#39;Temporal profiles NDVI&#39;,
+      vAxis: {title: &#39;NDVI&#39;},
+      lineWidth: 1,
+      pointSize: 4,
+      series: { //each color below is provided for a different region (feature)
+        0: {color: &#39;FF0000&#39;}, //red
+}});
+</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+
+<div id="rmd-source-code">LS0tDQp0aXRsZTogIlIgTm90ZWJvb2siDQpvdXRwdXQ6DQogIGdpdGh1Yl9kb2N1bWVudDogZGVmYXVsdA0KICBodG1sX25vdGVib29rOiBkZWZhdWx0DQprZWVwX21kOiB0cnVlDQotLS0NCg0KRmlyc3QsIHNldCB1cCBDb25kYSBlbnZpcm9ubWVudCBpbiBUZXJtaW5hbCBpZiBuZWVkZWQuIFNob3VsZCBhbHNvIGhhdmUgYSBHRUUgQVBJLiBBbmQgaHR0cHM6Ly9jbG91ZC5nb29nbGUuY29tL3Nkay9kb2NzL2luc3RhbGwgR29vZ2xlIENsb3VkIENMSSBtdXN0IGJlIGluc3RhbGxlZCBmb3IgZWFydGhlbmdpbmUgYXV0aGVudGljYXRlIHRvIHdvcmsuDQpgYGANCmNvbmRhIGNyZWF0ZSAtLW5hbWUgZ2VlIA0KY29uZGEgYWN0aXZhdGUgZ2VlICAgIA0KY29uZGEgaW5zdGFsbCAtbiBnZWUgLWMgY29uZGEtZm9yZ2UgZWFydGhlbmdpbmUtYXBpIA0KY29uZGEgaW5zdGFsbCAtbiBnZWUgcGFuZGFzDQplYXJ0aGVuZ2luZSBhdXRoZW50aWNhdGUNCmBgYA0KDQpJbml0aWF0ZSBSIHBhY2thZ2VzDQpgYGB7ciBpbmNsdWRlPUZBTFNFfQ0KbGlicmFyeSh0aWR5dmVyc2UpDQpgYGANCg0KYGBge3J9DQpsaWJyYXJ5KHJnZWUpDQojbGlicmFyeShnb29nbGVDbG91ZFN0b3JhZ2VSKQ0KIyBhdXRoZW50aWNhdGUgZ29vZ2xlIGNsb3VkIHN0b3JhZ2UNCiMgcmVxdWlyZWQgQVBJIGtleSBmcm9tIGh0dHBzOi8vY29uc29sZS5jbG91ZC5nb29nbGUuY29tL2FwaXMvZGFzaGJvYXJkIChjcmVhdGUgYSBzZXJ2aWNlIGFjY291bnQpDQojZ29vZ2xlQ2xvdWRTdG9yYWdlUjo6Z2NzX2F1dGgoanNvbl9maWxlID0gInRhc3NhamFyYS1jcmVlay1lODNmNmZiMzlhMGYuanNvbiIpDQppZiAoRkFMU0UpIHsNCiAgIyBpbnN0YWxsIGVhcnRoIGVuZ2luZSBBUEkgZm9yIHRoZSBmaXJzdCB0aW1lICh1c2UgZXhpc3RpbmcgQW5hY29uZGEgUHl0aG9uIGVudmksIG9yIHdpbGwgaW5zdGFsbCBtaW5pY29uZGEgZm9yIHlvdSkNCiAgZWVfaW5zdGFsbCgpDQp9DQpgYGANCg0KYGBgDQplYXJ0aGVuZ2luZSBhdXRoZW50aWNhdGUNCmBgYA0KDQpgYGB7cn0NCiMgYXV0aGVudGljYXRlIGVhcnRoIGVuZ2luZSBBUEkgKHJlcXVpcmVzIGFjY291bnQgY3JlYXRlZCBhdCBjb2RlLmVhcnRoZW5naW5lLmdvb2dsZS5jb20pDQplZV9Jbml0aWFsaXplKHVzZXIgPSAic2t5bGVybGV3aXNAYmVya2VsZXkuZWR1IiwgZHJpdmUgPSBULCBnY3MgPSBGKQ0KDQpgYGANCg0KDQpgYGB7cn0NCmxpYnJhcnkocmV0aWN1bGF0ZSkNCnVzZV9jb25kYWVudigicmdlZSIsIGNvbmRhID0gImF1dG8iLCByZXF1aXJlZCA9IFRSVUUpDQpgYGANCg0KRWFydGggRW5naW5lIHJvdXRpbmVzIHVzaW5nIEdFRSBQeXRob24gQVBJDQoNCmBgYHtweXRob259DQppbXBvcnQgZWUgICAgICAgDQojZWUuQXV0aGVudGljYXRlKCkNCmVlLkluaXRpYWxpemUodXNlciA9ICdza3lsZXJsZXdpc0BiZXJrZWxleS5lZHUnKSMsIGRyaXZlID0gVCwgZ2NzID0gVCkNCnByaW50KGVlLl9fdmVyc2lvbl9fKQ0KDQoNCmVlX2luc3RhbGwoKQ0KYGBgDQoNCmBgYHtweXRob259DQp0YXNzYWphcmFfcGVyaW0gPSBlZS5GZWF0dXJlQ29sbGVjdGlvbigiZGF0YS90YXNzYWphcmFfcGVyaW0uZ2VvanNvbiIpOw0KYGBgDQoNCmBgYHtweXRob259DQoNCmRlZiBhcHBseVNjYWxlRmFjdG9yc0w1KGltYWdlKToNCiAgb3B0aWNhbEJhbmRzID0gaW1hZ2Uuc2VsZWN0KCdTUl9CLicpLm11bHRpcGx5KDAuMDAwMDI3NSkuYWRkKC0wLjIpDQogIHRoZXJtYWxCYW5kID0gaW1hZ2Uuc2VsZWN0KCdTVF9CNicpLm11bHRpcGx5KDAuMDAzNDE4MDIpLmFkZCgxNDkuMCkNCiAgcmV0dXJuIChpbWFnZS5hZGRCYW5kcyhvcHRpY2FsQmFuZHMsIG51bGwsIHRydWUpDQogICAgICAgICAgICAgIC5hZGRCYW5kcyh0aGVybWFsQmFuZCwgbnVsbCwgdHJ1ZSkpDQoNCmRlZiBhcHBseU5kdmlMNShpbWFnZSk6DQogIG5kdmkgPSBlZS5JbWFnZShpbWFnZSkubm9ybWFsaXplZERpZmZlcmVuY2UoWydTUl9CNCcsICdTUl9CMyddKQ0KICByZXR1cm4gZWUuSW1hZ2UoaW1hZ2UpLmFkZEJhbmRzKG5kdmkpDQoNCiMgZ2V0IExhbmRzYXQgNSB0aHJvdWdoIGVuZCBvZiBTZXB0ZW1iZXIgMjAxMw0KbGFuZHNhdDUgPSAoZWUuSW1hZ2VDb2xsZWN0aW9uKCJMQU5EU0FUL0xUMDUvQzAyL1QxX0wyIikNCiAgICAuZmlsdGVyQm91bmRzKHRhc3NhamFyYV9wZXJpbSkNCiAgICAuZmlsdGVyRGF0ZSgnMTk4NC0wMS0wMScsICcyMDExLTA5LTMwJykNCiAgICAuZmlsdGVyTWV0YWRhdGEoJ0NMT1VEX0NPVkVSX0xBTkQnLCAnbGVzc190aGFuJywgMjApDQogICAgLm1hcChhcHBseVNjYWxlRmFjdG9yc0w1KQ0KICAgIC5tYXAoYXBwbHlOZHZpTDUpKQ0KDQpkZWYgYXBwbHlTY2FsZUZhY3RvcnNMNyhpbWFnZSk6DQogIG9wdGljYWxCYW5kcyA9IGltYWdlLnNlbGVjdCgnU1JfQi4nKS5tdWx0aXBseSgwLjAwMDAyNzUpLmFkZCgtMC4yKQ0KICB0aGVybWFsQmFuZCA9IGltYWdlLnNlbGVjdCgnU1RfQjYnKS5tdWx0aXBseSgwLjAwMzQxODAyKS5hZGQoMTQ5LjApDQogIHJldHVybiAoaW1hZ2UuYWRkQmFuZHMob3B0aWNhbEJhbmRzLCBudWxsLCB0cnVlKQ0KICAgICAgICAgICAgICAuYWRkQmFuZHModGhlcm1hbEJhbmQsIG51bGwsIHRydWUpKQ0KDQojIGdldCBMYW5kc2F0IDcgZm9yIGp1c3QgdGhlIGludGVyaW0gcGVyaW9kDQpsYW5kc2F0NyA9IChlZS5JbWFnZUNvbGxlY3Rpb24oJ0xBTkRTQVQvTEUwNy9DMDIvVDFfTDInKQ0KICAgIC5maWx0ZXJCb3VuZHModGFzc2FqYXJhX3BlcmltKQ0KICAgIC5maWx0ZXJEYXRlKCcyMDExLTEwLTAxJywgJzIwMTMtMDMtMzEnKQ0KICAgIC5maWx0ZXJNZXRhZGF0YSgnQ0xPVURfQ09WRVJfTEFORCcsICdsZXNzX3RoYW4nLCAyMCkNCiAgICAubWFwKGFwcGx5U2NhbGVGYWN0b3JzTDcpDQogICAgLm1hcChhcHBseU5kdmlMNSkpICMgY2FuIHVzZSBzYW1lIGZ1bmN0aW9uIGFzIExhbmRzYXQgNQ0KDQpkZWYgYXBwbHlTY2FsZUZhY3RvcnNMOChpbWFnZSk6DQogIG9wdGljYWxCYW5kcyA9IGltYWdlLnNlbGVjdCgnU1JfQi4nKS5tdWx0aXBseSgwLjAwMDAyNzUpLmFkZCgtMC4yKQ0KICB0aGVybWFsQmFuZHMgPSBpbWFnZS5zZWxlY3QoJ1NUX0IuKicpLm11bHRpcGx5KDAuMDAzNDE4MDIpLmFkZCgxNDkuMCkNCiAgcmV0dXJuIChpbWFnZS5hZGRCYW5kcyhvcHRpY2FsQmFuZHMsIG51bGwsIHRydWUpDQogICAgICAgICAgICAgIC5hZGRCYW5kcyh0aGVybWFsQmFuZHMsIG51bGwsIHRydWUpKQ0KDQpkZWYgYXBwbHlOZHZpTDgoaW1hZ2UpOg0KICBuZHZpID0gZWUuSW1hZ2UoaW1hZ2UpLm5vcm1hbGl6ZWREaWZmZXJlbmNlKFsnU1JfQjUnLCAnU1JfQjQnXSkNCiAgcmV0dXJuIGVlLkltYWdlKGltYWdlKS5hZGRCYW5kcyhuZHZpKQ0KDQojIGdldCBMYW5kc2F0IDggc3RhcnRpbmcgQXByaWwgMjAxMw0KbGFuZHNhdDggPSAoZWUuSW1hZ2VDb2xsZWN0aW9uKCJMQU5EU0FUL0xDMDgvQzAyL1QxX0wyIikNCiAgICAuZmlsdGVyQm91bmRzKHRhc3NhamFyYV9wZXJpbSkNCiAgICAuZmlsdGVyRGF0ZSgnMjAxMy0wNC0wMScsICcyMDIzLTEyLTMxJykNCiAgICAuZmlsdGVyTWV0YWRhdGEoJ0NMT1VEX0NPVkVSX0xBTkQnLCAnbGVzc190aGFuJywgMjApDQogICAgLm1hcChhcHBseVNjYWxlRmFjdG9yc0w4KQ0KICAgIC5tYXAoYXBwbHlOZHZpTDgpKQ0KICAgIA0KYGBgDQoNCmBgYHtweXRob259DQojIGNvbWJpbmUNCg0KbmR2aSA9IGxhbmRzYXQ1Lm1lcmdlKGxhbmRzYXQ3KS5tZXJnZShsYW5kc2F0OCkuc2VsZWN0KCduZCcpDQoNCiMgbm93IHJlZHVjZSBieSByZWdpb24NCg0KIyB0aGlzIGlzIHRoZSBwYXJ0IHRoYXQgbmVlZHMgdG8gYmUgY2hhbmdlZCBmb3IgcHl0aG9uIG91dHB1dA0KDQp0cyA9IENoYXJ0LmltYWdlLnNlcmllc0J5UmVnaW9uKG5kdmksIHRhc3NhamFyYV9wZXJpbSwNCiAgZWUuUmVkdWNlci5tZWFuKCksICduZCcsIDMwLCAnc3lzdGVtOnRpbWVfc3RhcnQnLCAnbmFtZScpDQogICAgLnNldENoYXJ0VHlwZSgnU2NhdHRlckNoYXJ0JykNCiAgICAuc2V0T3B0aW9ucyh7DQogICAgICB0aXRsZTogJ1RlbXBvcmFsIHByb2ZpbGVzIE5EVkknLA0KICAgICAgdkF4aXM6IHt0aXRsZTogJ05EVkknfSwNCiAgICAgIGxpbmVXaWR0aDogMSwNCiAgICAgIHBvaW50U2l6ZTogNCwNCiAgICAgIHNlcmllczogeyAvL2VhY2ggY29sb3IgYmVsb3cgaXMgcHJvdmlkZWQgZm9yIGEgZGlmZmVyZW50IHJlZ2lvbiAoZmVhdHVyZSkNCiAgICAgICAgMDoge2NvbG9yOiAnRkYwMDAwJ30sIC8vcmVkDQp9fSk7DQoNCmBgYA==</div>
 
 
 
@@ -1957,7 +1976,7 @@ $(document).ready(function () {
 <!-- code folding -->
 <script>
 $(document).ready(function () {
-  window.initializeSourceEmbed("tassajara_xs.Rmd");
+  window.initializeSourceEmbed("tassajara_gee.Rmd");
   window.initializeCodeFolding("show" === "show");
 });
 </script>

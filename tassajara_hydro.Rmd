@@ -127,6 +127,43 @@ peak_flow_dec_2022 <- new_years_storm_pred %>%
   max()
 print(peak_flow_dec_2022)
 ```
+```{r}
+# export the hydrograph for RAS 2D
+min_flow <- 100
+
+hydro_dec <- new_years_storm_pred %>% 
+  filter(between(result_datetime, ymd("2022-12-31"), ymd("2023-01-02"))) 
+ras_hydro_dec <- hydro_dec %>%
+  mutate(cfs = case_when(streamflow_cfs_pred > min_flow ~ streamflow_cfs_pred, TRUE ~ min_flow)) %>%
+  select(result_datetime, cfs) 
+
+ras_hydro_dec %>% write_csv("data/ras_hydro_2022-12-31.csv")
+ggplot() + geom_line(data = ras_hydro_dec, aes(x = result_datetime, y = cfs))
+
+hydro_jan <- new_years_storm_pred %>% 
+  filter(between(result_datetime, ymd("2023-01-14"), ymd("2023-01-18")))
+ras_hydro_jan <- hydro_jan %>%
+  mutate(cfs = case_when(streamflow_cfs_pred > min_flow ~ streamflow_cfs_pred, TRUE ~ min_flow)) %>%
+  select(result_datetime, cfs) 
+
+ras_hydro_jan %>% write_csv("data/ras_hydro_2023-01-14.csv")
+ggplot() + geom_line(data = ras_hydro_jan, aes(x = result_datetime, y = cfs)) 
+```
+
+```{r}
+# scale December hydrograph to 5200 cfs 100-year flow, 
+# as a simple approximation of the 100-year storm
+
+multiplier <- 5200 / max(ras_hydro_dec$cfs)
+
+ras_hydro_q100 <- hydro_dec %>% 
+  mutate(cfs = (cfs = case_when(streamflow_cfs_pred * multiplier > min_flow ~ streamflow_cfs_pred * multiplier, TRUE ~ min_flow))) %>%
+  select(result_datetime, cfs)
+
+ras_hydro_q100 %>% write_csv("data/ras_hydro_q100.csv")
+ggplot() + geom_line(data = ras_hydro_q100, aes(x = result_datetime, y = cfs))
+
+```
 
 
 # Flow Frequency
@@ -153,18 +190,24 @@ flow_freq_curve <- flow_freq %>%
 flow_freq_curve_inv <- flow_freq %>% 
   power_function_fit(y = return_interval_y, x = discharge_cfs)
 
-peak_flows %>% bind_rows(flow_freq) %>%
-  mutate(return_interval_y = flow_freq_curve_inv(discharge_cfs)) %>%
-  ggplot(aes(y = discharge_cfs, 
-             x = return_interval_y, 
-             label = case_when(!is.na(peak_flow_date) ~ as.character(peak_flow_date), TRUE ~ name))) + 
-  geom_line() + 
-  geom_point() + 
-  ggrepel::geom_text_repel() +
+flow_freq_pred <- flow_freq %>%
+  mutate(return_interval_y_pred = flow_freq_curve_inv(discharge_cfs))
+
+peak_flows_pred <- peak_flows %>%
+  mutate(return_interval_y_pred = flow_freq_curve_inv(discharge_cfs))
+
+ggplot() + 
+  geom_point(data = flow_freq, aes(y = discharge_cfs, x = return_interval_y)) + 
+  geom_point(data = peak_flows_pred, aes(y = discharge_cfs, x = return_interval_y_pred), color = "red") + 
+  geom_line(data = flow_freq_pred, aes(y = discharge_cfs, x = return_interval_y_pred)) + 
   scale_y_continuous(trans='log10') + 
   scale_x_continuous(trans='log10') + 
-  ggtitle("Flow frequency for model profiles")
+  ggtitle("Flow frequency for model profiles") +
+  ggrepel::geom_text_repel(data = flow_freq, aes(y = discharge_cfs, x = return_interval_y, label = name)) + 
+  ggrepel::geom_text_repel(data = peak_flows_pred, aes(y = discharge_cfs, x = return_interval_y_pred, label = as.character(peak_flow_date)), color = "red") 
+
 ```
+
 
 ```{r}
 #peak_flows %>% fasstr::compute_frequency_analysis()
@@ -174,13 +217,13 @@ peak_flows %>% bind_rows(flow_freq) %>%
 
 ```{r}
 cross_sections <- tribble(
-  ~cross_section, ~river_sta,
-  "B", 7600,
-  "D", 8200,
-  "E", 8800,
-  "F", 9300,
-  "G", 10200, 
-  "H", 10800
+  ~cross_section, ~station_1d, ~station_2d,
+  "B", 10800,  490,  # 3828,  
+  "D", 10200, 1210,  # 3157,   
+  "E",  9300, 2061,  # 2568,   
+  "F",  8800, 2568,  # 2061,  
+  "G",  8200, 3157,  # 1210,  
+  "H",  7600, 3828,  # 490 # , "580", ...4242
 )
 
 ```
@@ -360,12 +403,12 @@ bankfull %>%
 
 ```
 
-View RAS results
+View RAS 1D results
 
 ```{r}
 ras_1d <- read_csv("data/hec_ras_1d_out_v2.csv") %>%
   janitor::clean_names() %>% 
-  inner_join(cross_sections)
+  inner_join(cross_sections, by = join_by(river_sta == station_1d))
 
 ras_1d_pivot <- bind_rows(
   ras_1d %>% pivot_longer(starts_with("q_")) %>% mutate(measure = "discharge_cfs", 
@@ -489,7 +532,7 @@ ras_1d_sed %>%
   #group_by(series, cross_section, profile, q_total_cfs) %>% 
   #summarize(velocity_ft_s = mean(velocity_ft_s)) %>%
   ggplot(aes(x = q_total_cfs, y = velocity_ft_s)) + 
-  geom_point(aes(color = cross_section, label = cross_section, shape = series)) + scale_shape_manual(values=c(19, 21)) +
+  geom_point(aes(color = cross_section, shape = series)) + scale_shape_manual(values=c(19, 21)) +
   #facet_grid(cols = vars(series)) + 
   ggtitle("Velocity (via 1D model)") +
   geom_hline(yintercept=10, linetype='dotted', col = 'red') + 
@@ -499,14 +542,14 @@ ras_1d_sed %>%
 
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 # ras_1d_sed %>% 
 #   ggplot(aes(x = discharge_cfs, y = grain_size_mobilized_mm, color = loc)) + 
 #   geom_point() + 
 #   facet_grid(rows = vars(cross_section), cols = vars(profile))
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 # ras_1d_sed %>% 
 #   filter(profile == "31 Dec 2022") %>%
 #   filter(loc != "total") %>%
@@ -516,7 +559,7 @@ ras_1d_sed %>%
 ```
 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 # ras_1d_sed %>% 
 #   filter(loc != "total") %>%
 #   pivot_longer(cols = c(grain_size_mobilized_mm, grain_size_suspended_mm, velocity_ft_s)) %>%
@@ -528,9 +571,77 @@ ras_1d_sed %>%
 #   theme(strip.text.y.left = element_text(angle = 0))
 ```
 
+# View RAS 2D results
+
+```{r}
+
+# RAS 2D results
+ras_2d_gse <- read_csv("data/hec_ras_2d_profile_terrain.csv") %>%
+  janitor::clean_names()
+ras_2d_wse <- read_csv("data/hec_ras_2d_profile_wse_max.csv") %>%
+  janitor::clean_names()
+
+ras_2d_gse_bda <- read_csv("data/hec_ras_2d_profile_terrain_bda.csv") %>%
+  janitor::clean_names()
+ras_2d_wse_bda <- read_csv("data/hec_ras_2d_profile_wse_max_bda.csv") %>%
+  janitor::clean_names()
+
+# RAS 1D results
+hwm_dec_2022 <- hwm_geometries %>% 
+  filter(peak_flow_date == "2022-12-31") %>% 
+  left_join(cross_sections)
+
+# Upper bank elevations calculated in ArcGIS
+bank_elev <- inner_join(
+    read_csv("data/bank_elev_lb.csv") %>%
+      janitor::clean_names() %>% 
+      rename(station_2d = objectid, bank_elev_left = elev) %>%
+      select(station_2d, bank_elev_left),
+    read_csv("data/bank_elev_rb.csv") %>%
+      janitor::clean_names() %>% 
+      rename(station_2d = objectid, bank_elev_right = elev) %>%
+      select(station_2d, bank_elev_right)
+  ) %>%
+  mutate(bank_elev_min = case_when(
+    bank_elev_left < bank_elev_right ~ bank_elev_left, 
+    TRUE ~bank_elev_right)) %>%
+  mutate(bank_elev_rolling_med = zoo::rollapply(bank_elev_min, 100, median, partial=T))
+
+# Floodplain elevations (25ft from thalweg) calculated in ArcGIS
+floodplain_elev <- inner_join(
+    read_csv("data/bank_elev_lb_floodplain.csv") %>%
+      janitor::clean_names() %>% 
+      rename(station_2d = objectid, floodplain_elev_left = elev) %>%
+      select(station_2d, floodplain_elev_left),
+    read_csv("data/bank_elev_rb_floodplain.csv") %>%
+      janitor::clean_names() %>% 
+      rename(station_2d = objectid, floodplain_elev_right = elev) %>%
+      select(station_2d, floodplain_elev_right)
+  ) %>%
+  mutate(floodplain_elev_min = case_when(
+    floodplain_elev_left < floodplain_elev_right ~ floodplain_elev_left, 
+    TRUE ~floodplain_elev_right)) %>%
+  mutate(floodplain_elev_rolling_med = zoo::rollapply(floodplain_elev_min, 100, median, partial=T))
 
 
+ggplot() + 
+  geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile")) + 
+  geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)")) +
+  geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), linetype = "dashed") + 
+  geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), linetype = "dashed") +
+  geom_point(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation, color = "Terrain Profile")) +
+  geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "Surveyed HWM"), shape = 9, size = 4) + 
+  geom_point(data = filter(ras_1d, profile=="31 Dec 2022"), aes(x = station_2d, y = w_s_elev_ft, color = "Water Surface (RAS)")) +
+  geom_smooth(data = bank_elev, aes(x = station_2d, y = bank_elev_rolling_med, color = "Appx. Ground Surface"), 
+              method = "gam", linetype = "dashed", size = 0.75) +
+  geom_smooth(data = floodplain_elev, aes(x = station_2d, y = floodplain_elev_rolling_med, color = "Appx. Ground Surface"), 
+              method = "gam", linetype = "dashed", size = 0.75) +
+  scale_color_manual(values = c("Terrain Profile" = "black", 
+                                "Appx. Ground Surface" = "black", 
+                                "Water Surface (RAS)" = "blue",
+                                "Surveyed HWM" = "red"))
 
+```
 
 
 

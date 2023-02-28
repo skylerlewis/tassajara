@@ -1,0 +1,142 @@
+---
+title: "R Notebook"
+output:
+  github_document: default
+  html_notebook: default
+keep_md: true
+---
+
+First, set up Conda environment in Terminal if needed. Should also have a GEE API. And https://cloud.google.com/sdk/docs/install Google Cloud CLI must be installed for earthengine authenticate to work.
+```
+conda create --name gee 
+conda activate gee    
+conda install -n gee -c conda-forge earthengine-api 
+conda install -n gee pandas
+earthengine authenticate
+```
+
+Initiate R packages
+```{r include=FALSE}
+library(tidyverse)
+```
+
+```{r}
+library(rgee)
+#library(googleCloudStorageR)
+# authenticate google cloud storage
+# required API key from https://console.cloud.google.com/apis/dashboard (create a service account)
+#googleCloudStorageR::gcs_auth(json_file = "tassajara-creek-e83f6fb39a0f.json")
+if (FALSE) {
+  # install earth engine API for the first time (use existing Anaconda Python envi, or will install miniconda for you)
+  ee_install()
+}
+```
+
+```
+earthengine authenticate
+```
+
+```{r}
+# authenticate earth engine API (requires account created at code.earthengine.google.com)
+ee_Initialize(user = "skylerlewis@berkeley.edu", drive = T, gcs = F)
+
+```
+
+
+```{r}
+library(reticulate)
+use_condaenv("rgee", conda = "auto", required = TRUE)
+```
+
+Earth Engine routines using GEE Python API
+
+```{python}
+import ee       
+#ee.Authenticate()
+ee.Initialize(user = 'skylerlewis@berkeley.edu')#, drive = T, gcs = T)
+print(ee.__version__)
+
+
+ee_install()
+```
+
+```{python}
+tassajara_perim = ee.FeatureCollection("data/tassajara_perim.geojson");
+```
+
+```{python}
+
+def applyScaleFactorsL5(image):
+  opticalBands = image.select('SR_B.').multiply(0.0000275).add(-0.2)
+  thermalBand = image.select('ST_B6').multiply(0.00341802).add(149.0)
+  return (image.addBands(opticalBands, null, true)
+              .addBands(thermalBand, null, true))
+
+def applyNdviL5(image):
+  ndvi = ee.Image(image).normalizedDifference(['SR_B4', 'SR_B3'])
+  return ee.Image(image).addBands(ndvi)
+
+# get Landsat 5 through end of September 2013
+landsat5 = (ee.ImageCollection("LANDSAT/LT05/C02/T1_L2")
+    .filterBounds(tassajara_perim)
+    .filterDate('1984-01-01', '2011-09-30')
+    .filterMetadata('CLOUD_COVER_LAND', 'less_than', 20)
+    .map(applyScaleFactorsL5)
+    .map(applyNdviL5))
+
+def applyScaleFactorsL7(image):
+  opticalBands = image.select('SR_B.').multiply(0.0000275).add(-0.2)
+  thermalBand = image.select('ST_B6').multiply(0.00341802).add(149.0)
+  return (image.addBands(opticalBands, null, true)
+              .addBands(thermalBand, null, true))
+
+# get Landsat 7 for just the interim period
+landsat7 = (ee.ImageCollection('LANDSAT/LE07/C02/T1_L2')
+    .filterBounds(tassajara_perim)
+    .filterDate('2011-10-01', '2013-03-31')
+    .filterMetadata('CLOUD_COVER_LAND', 'less_than', 20)
+    .map(applyScaleFactorsL7)
+    .map(applyNdviL5)) # can use same function as Landsat 5
+
+def applyScaleFactorsL8(image):
+  opticalBands = image.select('SR_B.').multiply(0.0000275).add(-0.2)
+  thermalBands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
+  return (image.addBands(opticalBands, null, true)
+              .addBands(thermalBands, null, true))
+
+def applyNdviL8(image):
+  ndvi = ee.Image(image).normalizedDifference(['SR_B5', 'SR_B4'])
+  return ee.Image(image).addBands(ndvi)
+
+# get Landsat 8 starting April 2013
+landsat8 = (ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
+    .filterBounds(tassajara_perim)
+    .filterDate('2013-04-01', '2023-12-31')
+    .filterMetadata('CLOUD_COVER_LAND', 'less_than', 20)
+    .map(applyScaleFactorsL8)
+    .map(applyNdviL8))
+    
+```
+
+```{python}
+# combine
+
+ndvi = landsat5.merge(landsat7).merge(landsat8).select('nd')
+
+# now reduce by region
+
+# this is the part that needs to be changed for python output
+
+ts = Chart.image.seriesByRegion(ndvi, tassajara_perim,
+  ee.Reducer.mean(), 'nd', 30, 'system:time_start', 'name')
+    .setChartType('ScatterChart')
+    .setOptions({
+      title: 'Temporal profiles NDVI',
+      vAxis: {title: 'NDVI'},
+      lineWidth: 1,
+      pointSize: 4,
+      series: { //each color below is provided for a different region (feature)
+        0: {color: 'FF0000'}, //red
+}});
+
+```
