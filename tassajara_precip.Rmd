@@ -1,5 +1,5 @@
 ---
-title: "Extrapolation of Tassajara rain gauge"
+title: "Time Series Analysis - Precip and NDVI"
 output:
   github_document: default
   html_notebook: default
@@ -8,9 +8,12 @@ keep_md: true
 
 ```{r}
 library(tidyverse)
+library(lubridate)
 ggplot2::theme_set(theme_classic())
 
 ```
+
+# CDEC Precipitation
 
 ```{r}
 
@@ -24,33 +27,36 @@ rawdata_mlr %>% saveRDS(file = "data/rawdata_mlr.rds")
 }
 ```
 
-
 ```{r}
 rawdata_tas <- readRDS(file = "data/rawdata_tas.rds")
 rawdata_mlr <- readRDS(file = "data/rawdata_mlr.rds")
 
-daily_data_tas <- rawdata_tas %>%
+inst_data_tas <- rawdata_tas %>%
   as_tibble() %>%
   janitor::clean_names() %>% 
   mutate(date = lubridate::round_date(date_time, unit="day"),
-         increment = case_when(value >= lag(value, n=1) ~ value - lag(value, n=1))) %>%
+         date_hour = lubridate::round_date(date_time, unit="hour"),
+         value = as.numeric(value),
+         increment = case_when(value >= lag(value, n=1) ~ value - lag(value, n=1))) 
+daily_data_tas <- inst_data_tas %>%
   group_by(date) %>%
   summarize(precip_tas = sum(increment))
 
-daily_data_tas %>% ggplot(aes(y = precip_tas, x = date)) + geom_col()
+daily_data_tas %>% 
+  ggplot(aes(y = precip_tas, x = date)) + geom_col()
 
-daily_data_mlr <- rawdata_mlr %>% 
+inst_data_mlr <- rawdata_mlr %>% 
   as_tibble() %>%
   janitor::clean_names() %>% 
   mutate(date = lubridate::round_date(date_time, unit="day"),
+         date_hour = lubridate::round_date(date_time, unit="hour"),
          value = as.numeric(value),
-         increment = case_when(value >= lag(value, n=1) ~ value - lag(value, n=1))) %>%
+         increment = case_when(value >= lag(value, n=1) ~ value - lag(value, n=1))) 
+daily_data_mlr <- inst_data_mlr %>%
   group_by(date) %>%
   summarize(precip_mlr = sum(increment))
 
 daily_data_mlr %>% ggplot(aes(y = precip_mlr, x = date)) + geom_col()
-
-
 ```
 
 ```{r}
@@ -59,7 +65,7 @@ daily_data <- daily_data_mlr %>%
   left_join(daily_data_tas) 
 
 daily_data_filtered <- daily_data %>%
-  filter(precip_tas > 0 & precip_mlr > 0)
+  filter(precip_tas > 0 & precip_mlr > 0) %>% filter(precip_mlr>0.1 & precip_mlr<1)
 
 daily_data_filtered %>% 
   #select(c(precip_tas, precip_mlr)) %>%
@@ -76,18 +82,198 @@ summary(model)
 alpha <- exp(model$coefficients["(Intercept)"])
 beta <- model$coefficients["log(daily_data_filtered$precip_mlr)"]
 
-daily_data_pred <- daily_data %>% 
-  mutate(precip_tas_pred = case_when(
-    !is.na(precip_mlr) ~ alpha * precip_mlr^beta, 
-    TRUE ~ 0
-    ))
+# daily_data_pred <- daily_data %>% 
+#   mutate(precip_tas_pred = case_when(
+#     !is.na(precip_mlr) ~ alpha * precip_mlr^beta, 
+#     TRUE ~ 0
+#     ))
 
-daily_data_pred %>% ggplot(aes(y = precip_tas_pred, x = date)) + geom_col()
+# daily_data_pred <- daily_data %>% 
+#   mutate(precip_tas_pred = case_when(
+#     is.na(precip_tas) ~ alpha * precip_mlr^beta, 
+#     TRUE ~ precip_tas
+#     ))
+
+daily_data_pred <- daily_data %>% 
+  mutate(precip_tas_pred = replace_na(case_when(date < min(daily_data_tas$date) ~ alpha * precip_mlr^beta, TRUE ~ precip_tas),0))
+
+daily_data_pred %>% 
+  ggplot(aes(y = precip_tas_pred, x = date)) + #, fill = precip_tas_pred)) +
+   geom_area() + 
+  scale_y_continuous(expand = c(0, 0),limits = c(0, 2)) +
+    ggtitle("Maximum 24h precipitation (inches) at Tassajara") + 
+    #scale_fill_viridis_c(direction = -1) + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
 ggsave("barchart.svg")
 
 daily_data_pred %>% write_csv("data/daily_data_pred.csv")
 
 ```
+
+```{r}
+daily_data_pred %>% 
+  mutate(#cal_year = year(date),
+         water_year = case_when(month(date) >= 10 ~ year(date) + 1, TRUE ~ year(date))) %>% 
+  group_by(water_year) %>% 
+  slice(which.max(precip_tas_pred)) %>%
+  rename(precip_max_24h = precip_tas_pred, date_max_24h = date) %>%
+  ggplot(aes(y = precip_max_24h, x = as.factor(date_max_24h), fill = precip_max_24h)) + 
+    geom_col(width = 1) +
+    geom_text(aes(label = round(precip_max_24h, 1)), vjust=-0.5) +
+    scale_x_discrete(name = "Day of Water Year Max 24h Precipitation") +
+    scale_y_continuous(name = "Maximum 24h precipitation (inches)", expand = c(0, 0), limits = c(0, 10)) +
+    ggtitle("Maximum 24h precipitation (inches) at Tassajara") + 
+    scale_fill_viridis_c(direction = -1) + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  theme(legend.position = "none")
+
+```
+```{r}
+
+daily_data_pred %>% 
+  mutate(#cal_year = year(date),
+         water_year = case_when(month(date) >= 10 ~ year(date) + 1, TRUE ~ year(date))) %>% 
+  group_by(water_year) %>% 
+  summarize(precip_wy_total = sum(precip_tas_pred)) %>%
+  ggplot(aes(y = precip_wy_total, x = as.factor(water_year), fill = precip_wy_total)) + 
+    geom_col(width = 1) +
+    geom_text(aes(label = round(precip_wy_total, 1)), vjust=-0.5) +
+    scale_x_discrete(name = "Water Year") +
+    scale_y_continuous(name = "Total annual precipitation (inches)", expand = c(0, 0), limits = c(0, 40)) +
+    ggtitle("Total annual precipitation (inches) at Tassajara") + 
+    scale_fill_viridis_c(direction = -1) + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  theme(legend.position = "none")
+
+```
+```{r}
+# IMPROVED VERSION USING ROLLING 24H WINDOW RATHER THAN CALENDAR 24H DAY -- IN PROGRESS
+hourly_tas <- inst_data_tas %>%
+  group_by(date_hour) %>%
+  summarize(precip_tas = sum(increment)) %>%
+  complete(date_hour) %>%
+  mutate(precip_tas_24h = zoo::rollapplyr(precip_tas, 24, sum, partial=T)) 
+
+hourly_mlr <- inst_data_mlr %>%
+  group_by(date_hour) %>%
+  summarize(precip_mlr = sum(increment)) %>%
+  complete(date_hour) %>%
+  mutate(precip_mlr_24h = zoo::rollapplyr(precip_mlr, 24, sum, partial=T)) 
+
+hourly <- hourly_mlr %>% left_join(hourly_tas) 
+
+hourly_filtered <- hourly %>% 
+  select(precip_tas_24h, precip_mlr_24h) %>%
+  filter(precip_tas_24h > 0, precip_mlr_24h > 0)
+model <- lm(log(hourly_filtered$precip_tas_24h) ~ log(hourly_filtered$precip_mlr_24h))
+summary(model)
+alpha <- exp(model$coefficients["(Intercept)"])
+beta <- model$coefficients["log(hourly_filtered$precip_mlr_24h)"]
+
+rolling24h_pred <- hourly %>% 
+#  mutate(precip_tas_24h_pred = alpha * precip_mlr_24h^beta)
+   mutate(precip_tas_24h_pred = replace_na(case_when(date_hour < min(hourly_tas$date_hour) ~ alpha * precip_mlr_24h^beta, TRUE ~ precip_tas_24h),0))
+
+rolling24h_pred %>%
+  mutate(water_year = case_when(month(date_hour) >= 10 ~ year(date_hour) + 1, TRUE ~ year(date_hour))) %>% 
+  group_by(water_year) %>%
+  slice(which.max(precip_tas_24h_pred)) %>%
+  rename(precip_tas_24h_max = precip_tas_24h_pred, date_24h_max = date_hour) %>%
+  ggplot(aes(y = precip_tas_24h_max, x = as.factor(date_24h_max), fill = precip_tas_24h_max)) + 
+    geom_col(width = 1) +
+    geom_text(aes(label = round(precip_tas_24h_max, 1)), vjust=-0.5) +
+    scale_x_discrete(name = "Day of Water Year Max 24h Precipitation") +
+    scale_y_continuous(name = "Maximum 24h precipitation (inches)", expand = c(0, 0), limits = c(0, 20)) +
+    ggtitle("Maximum 24h precipitation (inches) at Tassajara") + 
+    scale_fill_viridis_c(direction = -1) + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  theme(legend.position = "none")
+
+
+
+    
+```
+
+
+# PRISM Precipitation
+
+```{r}
+# PRISM long term time series for a single location
+# retrieved from https://prism.oregonstate.edu/explorer/ for 37.7083, -121.8750
+
+prism_monthly <- read_csv("data/PRISM_ppt_tmin_tmean_tmax_tdmean_vpdmin_vpdmax_provisional_4km_189501_202302_37.7083_-121.8750.csv", skip = 10) %>%
+  janitor::clean_names() %>%
+  mutate(date = ym(date),
+         water_year = case_when(month(date) >= 10 ~ year(date) + 1, TRUE ~ year(date)))
+
+```
+```{r}
+prism_monthly %>% 
+  filter(water_year>1997) %>%
+  ggplot(aes(y = ppt_inches, x = date %m+% months(3), fill = ppt_inches)) + 
+    geom_col() +
+    scale_y_continuous(name = "Monthly total precipitation (inches)", expand = c(0, 0), limits = c(0, 15)) +
+    ggtitle("PRISM historical precipitation for Lower Tassajara Creek") + scale_fill_viridis_c(direction = -1)  + 
+  theme(legend.position = "none")
+```
+
+```{r}
+
+prism_yearly <- prism_monthly %>% 
+  group_by(water_year) %>% 
+  summarize(ppt_inches = sum(ppt_inches))#,
+            #vpd_min = min(vpdmax_h_pa), 
+            #vpd_max = max(vpdmax_h_pa))
+
+ppt_quantiles <- quantile(prism_yearly$ppt_inches, c(0.00, 0.25, 0.50, 0.75, 1.00))
+print(ppt_quantiles)
+
+prism_yearly_top <- prism_yearly %>% arrange(-ppt_inches) %>% top_n(4)
+
+prism_yearly %>% 
+  mutate(ppt_quantile = cut_number(ppt_inches, n = 4)) %>%
+  ggplot(aes(y = ppt_inches, x = water_year, fill = ppt_quantile)) + 
+    geom_col(width = 1) +
+    geom_text(aes(label = case_when(water_year %in% prism_yearly_top$water_year ~ paste(water_year, ppt_inches, sep = "\n"), TRUE ~ NA)), vjust=-0.25) +
+    #scale_fill_brewer()
+    scale_fill_viridis_d(direction = -1) +
+    scale_x_continuous(name ="Water Year", breaks = seq(1890, 2020, by = 10), expand = c(0,0)) +
+    scale_y_continuous(name = "Annual total precipitation (inches)", expand = c(0, 0), limits = c(0, 50)) +
+    ggtitle("PRISM historical precipitation for Lower Tassajara Creek")  + 
+  theme(legend.position = "none")
+
+``` 
+
+```{r}
+coeff <- 30
+prism_monthly  %>% 
+  mutate(time_month = fct_recode(as.factor(month(date)), 
+                                 "Jan" = "1", "Feb" = "2" , "Mar" = "3", 
+                                 "Apr" = "4", "May" = "5" , "Jun" = "6", 
+                                 "Jul" = "7", "Aug" = "8" , "Sep" = "9", 
+                                 "Oct" = "10", "Nov" = "11","Dec" = "12"),
+         time_year = year(date)) %>%
+  group_by(time_month) %>% 
+  summarize(mean_precip = mean(ppt_inches),
+            mean_temp = mean(tmean_degrees_f),
+            mean_temp_min = mean(tmin_degrees_f),
+            mean_temp_max = mean(tmax_degrees_f)) %>%
+  ggplot(aes(x = time_month)) + 
+  geom_col(aes(y = mean_precip, group = 1, fill = mean_precip), width=1) + 
+  #geom_text(aes(y = mean_precip, label = round(mean_precip,2), group = 1)) + 
+  geom_point(aes(y = mean_temp/coeff, group = 1)) + 
+  geom_line(aes(y = mean_temp/coeff, group = 1)) + 
+  #geom_ribbon(aes(ymin = mean_temp_min/coeff, ymax = mean_temp_max/coeff, group = 1)) +
+  scale_y_continuous(name = "precip", sec.axis = sec_axis(trans = ~.*coeff, name = "temp"), expand = c(0,0)) + 
+  ggtitle("PRISM monthly average precipitation and temperature") +
+  scale_fill_viridis_c(direction = -1) + geom_vline(xintercept=9.5, linetype="dashed") + 
+  theme(legend.position = "none")
+  
+```
+
+# Landsat NDVI
+
 ```{r}
 ndvi_time_series <- read_csv("data/ndvi_time_series.csv")
 
@@ -101,8 +287,87 @@ ndvi_time_series_interp <- ndvi_time_series %>%
 
 ```{r}
 
-maxRange <- 3/2
-coeff <- 2/3
+ggplot() + 
+geom_line(data = ndvi_time_series_interp, aes(y = ndvi, x = time), color="darkolivegreen2") +
+geom_line(data = ndvi_time_series_interp, aes(y = rolling_ndvi, x = time), color="seagreen") +
+scale_y_continuous(name = "NDVI",)
+
+```
+
+```{r}
+
+ggplot() + 
+geom_line(data = ndvi_time_series_interp, aes(y = ndvi, x = time), color="gray", size=.25) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(2, 3, 4)),   aes(y = ndvi, x = time), color="blue", size = 1) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(5, 6, 7)),   aes(y = ndvi, x = time), color="gray", size = 1) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(8, 9, 10)),  aes(y = ndvi, x = time), color="red",  size = 1) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(11, 12, 1)), aes(y = ndvi, x = time), color="gray", size = 1) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c()),   aes(y = ndvi, x = time), color="gray", size = 1) +
+geom_line(data = ndvi_time_series_interp, aes(y = rolling_ndvi, x = time), color="black", size = 1) +
+scale_y_continuous(name = "NDVI",) + ggtitle("Landsat NDVI Time Series 1989-2023")
+
+```
+
+```{r}
+ndvi_time_series_interp %>% 
+  mutate(time_month = fct_recode(as.factor(month(date_round)), 
+                                 "Jan" = "1", "Feb" = "2" , "Mar" = "3", 
+                                 "Apr" = "4", "May" = "5" , "Jun" = "6", 
+                                 "Jul" = "7", "Aug" = "8" , "Sep" = "9", 
+                                 "Oct" = "10", "Nov" = "11","Dec" = "12"),
+         after_restoration = date_round > ymd("2000-01-01")) %>%
+  group_by(time_month, after_restoration) %>% 
+  summarize(mean_ndvi = mean(ndvi), sd_ndvi = sd(ndvi), n_ndvi = n()) %>%
+  mutate(se_ndvi = sd_ndvi / sqrt(n_ndvi)) %>%
+  ggplot(aes(x = time_month, fill = after_restoration)) + 
+  geom_col(aes(y = mean_ndvi), position = "dodge") +
+  scale_y_continuous(expand = c(0, 0))  + ggtitle("Landsat average NDVI by month, 1989-1999 vs 2000-2023")
+
+```
+
+```{r}
+ndvi_time_series_interp %>% 
+  mutate(time_month = fct_recode(as.factor(month(date_round)), 
+                                 "Jan" = "1", "Feb" = "2" , "Mar" = "3", 
+                                 "Apr" = "4", "May" = "5" , "Jun" = "6", 
+                                 "Jul" = "7", "Aug" = "8" , "Sep" = "9", 
+                                 "Oct" = "10", "Nov" = "11","Dec" = "12"),
+         time_year = year(date_round),
+         after_restoration = date_round > ymd("2000-01-01")) %>%
+  group_by(time_month, after_restoration) %>% 
+  do(model = lm(ndvi ~ time_year, data = .)) %>%
+  mutate(model_coeff = list(model$coefficients), 
+         model_se = summary(model)$coefficients["time_year", "Std. Error"], #"Std. Error" "t value" "Pr(>|t|)"
+         model_n = summary(model)$n) %>% 
+  unnest_wider(col = model_coeff) %>%
+  janitor::clean_names() %>%
+  rename(model_slope = time_year) %>%
+  ggplot(aes(y = time_month, color = after_restoration)) + 
+  geom_point(aes(x = model_slope)) +
+  geom_errorbarh(aes(xmin = model_slope - 1.96*model_se, xmax = model_slope + 1.96*model_se)) + 
+  geom_vline(xintercept = 0) + scale_y_discrete(limits = rev) + ggtitle("Landsat change in NDVI per year by month, 1989-1999 vs 2000-2023")
+#https://www.statology.org/extract-coefficients-from-lm-in-r/
+```
+
+
+
+```{r}
+print(mean(filter(ndvi_time_series_interp, time < ymd("2000-01-01"))$ndvi))
+print(mean(filter(ndvi_time_series_interp, year(time) == "2000")$ndvi))
+print(mean(filter(ndvi_time_series_interp, year(time) == "2022")$ndvi))
+print(mean(filter(ndvi_time_series_interp, time > ymd("2018-01-01"))$ndvi))
+
+# create bar plot of mean ndvi by year
+
+ndvi_time_series_interp %>% 
+  mutate(water_year = case_when(month(time) >= 10 ~ year(time) + 1, TRUE ~ year(time))) %>%
+  group_by(water_year) %>% summarize(mean_ndvi = mean(ndvi)) %>% 
+  ggplot(aes(y = mean_ndvi, x= water_year)) + geom_col()
+```
+
+```{r}
+maxRange <- 10
+coeff <- 1 / maxRange
 
 ggplot() + 
 geom_area(data = daily_data_pred, aes(y = precip_tas_pred, x = date), color="cadetblue") +
@@ -115,3 +380,48 @@ scale_y_continuous(name = "precipitation",
                                      name = "NDVI"))
 
 ```
+
+```{r}
+#ndvi_time_series %>% 
+#  mutate(time_month = month(time)) %>%
+#  ggplot(aes(x = time, y = ndvi, color = as.factor(time_month), fill = as.factor(time_month))) + geom_smooth(se=F)
+#
+#ndvi_time_series %>% 
+#  mutate(time_month = month(time),
+#         season = factor(case_when(
+#           #time_month %in% c(4, 5, 6) ~ "Spring",
+#           #time_month %in% c(8, 9, 10) ~ "Summer",
+#           #time_month %in% c(12, 1, 2) ~ "Rainy"
+#           time_month %in% c(3, 4) ~ "Mar - Apr",
+#           time_month %in% c(5, 6, 7) ~ "May - Jul",
+#           time_month %in% c(8, 9, 10) ~ "Aug - Oct",
+#           time_month %in% c(11, 12, 1, 2) ~ "Nov - Feb",
+#         ), levels = c("Mar - Apr", "May - Jul", "Aug - Oct", "Nov - Feb"))) %>%
+#  ggplot(aes(x = time, y = ndvi, color = season, fill = season)) + 
+#    geom_point(size = 1) + 
+#    geom_smooth(method = "loess", span = .5, se = T) + # geom_smooth(method = "gam") #geom_text(aes(label = time_month)) 
+#    theme(legend.position = "top") #+ 
+#    #scale_color_manual(values=colors) + scale_fill_manual(values=colors)
+
+```
+
+```{r}
+colors <- c("cadetblue", "lightgreen", "orange")
+ndvi_time_series %>% 
+  mutate(time_month = month(time),
+         season = factor(case_when(
+           #time_month %in% c(4, 5, 6) ~ "Spring",
+           #time_month %in% c(8, 9, 10) ~ "Summer",
+           #time_month %in% c(12, 1, 2) ~ "Rainy"
+           time_month %in% c(3, 4, 5, 6) ~ "Mar - Jun",
+           time_month %in% c(7, 8, 9, 10) ~ "Jul - Oct",
+           time_month %in% c(11, 12, 1, 2) ~ "Nov - Feb"
+         ), levels = c("Nov - Feb", "Mar - Jun", "Jul - Oct"))) %>%
+  ggplot(aes(x = time, y = ndvi, color = season, fill = season)) + 
+    geom_point(size = 1) + 
+    geom_smooth(method = "loess", span = .25, se = T) + # geom_smooth(method = "gam") #geom_text(aes(label = time_month)) 
+    theme(legend.position = "top") + 
+    scale_color_manual(values=colors) + scale_fill_manual(values=colors)
+```
+
+
