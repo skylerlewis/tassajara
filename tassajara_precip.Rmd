@@ -424,4 +424,42 @@ ndvi_time_series %>%
     scale_color_manual(values=colors) + scale_fill_manual(values=colors)
 ```
 
+# crosstab of NDVI and relative elevation
+```{r}
+aoi <- sf::st_read("data/tassajara_perim_50ft.kml") %>% 
+  terra::vect() # convert from sf into terra vector
+
+naip_scale <- terra::rast("data/raster/naip_scale.tif") %>% 
+  terra::classify(cbind(0, NA))  # mask zeros
+naip_offset <- terra::rast("data/raster/naip_offset.tif") %>% 
+  terra::classify(cbind(0, NA))  # mask zeros
+rem <- terra::rast("data/raster/lidar2021_REM.tif") %>% 
+  terra::project(naip_scale) %>% # reproject to same crs
+  terra::mask(aoi)
+
+terra::plot(rem)
+
+# categorical crosstab
+terra::crosstab(c(
+  naip_scale %>% classify(seq(from=0, to=1, by=0.01)),
+  rem %>% terra::classify(seq(from=0, to=30, by=1))
+))
+
+# # scatterplot
+# terra::plot(rem[[1]], naip_scale[[1]])
+ 
+rem_zones <- rem %>% terra::classify(c(0, 4, 8, 12))
+naip_scale %>% terra::boxplot(rem_zones)
+naip_offset %>% terra::boxplot(rem_zones)
+
+```
+
+
+
+
+
+
+
+
+
 
