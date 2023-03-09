@@ -70,7 +70,7 @@ new_years_storm_pred <- new_years_storm %>%
   mutate(streamflow_cfs_pred = rating_curve(stage_ft))
 
 # version 2 of the rating curve using stepwise interpolation based on the I-580 HWM
-peak_flow_jan_2023 <- 3657
+peak_flow_jan_2023 <- 3524
 
 rating_curve <- new_years_storm %>% 
   select(c(streamflow_cfs, stage_ft)) %>% 
@@ -153,7 +153,7 @@ peak_flow_dec_2022 <- new_years_storm_pred %>%
 print(peak_flow_dec_2022)
 ```
 
-    ## [1] 3464.893
+    ## [1] 3346.059
 
 ``` r
 # export the hydrograph for RAS 2D
@@ -221,7 +221,7 @@ ggplot() +
 ``` r
 peak_flows <- tribble(
   ~peak_flow_date, ~discharge_cfs,
-  ymd("2019-02-13"), 560,
+  ymd("2019-02-13"), 561,
   ymd("2022-11-11"), 105,
   ymd("2022-12-31"), peak_flow_dec_2022,
   ymd("2023-01-14"), peak_flow_jan_2023
@@ -269,19 +269,19 @@ ggplot() +
 
 ``` r
 stations <- tribble(
-  ~cross_section, ~station_1d, ~station_2d,
-   NA,    NA,    0, # US boundary
-   NA, 11300,   26, # gleason apron toe
-  "B", 10800,  490,    
-   NA, 10400,   NA, # pedestrian path
-  "D", 10200, 1210,     
-  "E",  9300, 2061,     
-  "F",  8800, 2568,    
-  "G",  8200, 3157,    
-  "H",  7600, 3828,  
-   NA,  6900,   NA, # 580 frontage apron head
-   NA,  6800,   NA, # 580 underpass
-   NA,    NA, 4507  # DS boundary
+  ~cross_section, ~station_1d, ~station_2d, ~culvert,
+   NA,    NA,    0, NA, # US boundary
+   NA, 11300,   26, "Gleason",# gleason apron toe
+  "B", 10800,  490, NA,    
+   NA, 10400,   NA, NA, # pedestrian path
+  "D", 10200, 1210, NA,     
+  "E",  9300, 2061, NA,     
+  "F",  8800, 2568, NA,    
+  "G",  8200, 3157, NA,    
+  "H",  7600, 3828, NA,  
+   NA,  6900,   NA, NA, # 580 frontage apron head
+   NA,  6800,   NA, "I-580",# 580 underpass
+   NA,    NA, 4507, NA,  # DS boundary
 )
 
 cross_sections <- stations %>% drop_na(cross_section)
@@ -361,6 +361,13 @@ xs_g <- read_csv("data/xs_geom/xs_g.csv") %>%
 
 xs_h <- read_csv("data/xs_geom/xs_h.csv") %>%
   prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) 
+
+culvert_gleason <- read_csv("data/xs_geom/culvert_gleason.csv") %>%
+  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) 
+
+culvert_i580 <- read_csv("data/xs_geom/culvert_i580.csv") %>%
+  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) 
+
 
 xs_dfs <- tribble(
   ~xs_id, ~xs_df,
@@ -449,6 +456,111 @@ thalweg_elevations <- xs_dfs %>%
   select(xs_id, thalweg_elevation)
 ```
 
+Estimate slopes to use in 1d hydraulics. For channels, use normal depth
+assumption and calc avg ground slope. For floodplain, use the Dec 2022
+HWMs.
+
+``` r
+hwm_geometries %>% filter(peak_flow_date == ymd("2022-12-31"))
+```
+
+    ## # A tibble: 6 × 11
+    ##   series     cross_…¹ peak_flo…² hwm_e…³  slope xs_df    thalw…⁴ water…⁵ max_d…⁶
+    ##   <chr>      <chr>    <date>       <dbl>  <dbl> <list>     <dbl>   <dbl>   <dbl>
+    ## 1 floodplain B        2022-12-31    365. 0.0076 <tibble>    352.    365.   13.3 
+    ## 2 floodplain D        2022-12-31    361. 0.0019 <tibble>    348.    361.   13.3 
+    ## 3 floodplain E        2022-12-31    356. 0.0056 <tibble>    344.    356.   11.8 
+    ## 4 floodplain F        2022-12-31    353. 0.0073 <tibble>    343.    353.   10.3 
+    ## 5 floodplain G        2022-12-31    350. 0.008  <tibble>    342.    350.    8.45
+    ## 6 floodplain H        2022-12-31    347. 0.0023 <tibble>    339.    347.    7.63
+    ## # … with 2 more variables: cross_sectional_area <dbl>, wetted_perimeter <dbl>,
+    ## #   and abbreviated variable names ¹​cross_section, ²​peak_flow_date,
+    ## #   ³​hwm_elevation, ⁴​thalweg_elevation, ⁵​water_surface_elevation, ⁶​max_depth
+
+``` r
+gleason_wse <- seq(from=min(culvert_gleason$gse)+0.1, to=max(culvert_gleason$gse), by=0.1) %>% 
+  as_tibble() %>%
+  mutate(result = map(value, function(x){calc_xs(data = culvert_gleason, water_elev=x)})) %>% 
+  unnest_wider(col = result) %>%
+  drop_na() %>%
+  mutate(slope = 0.010,
+         mannings_n = 0.016,
+         hydraulic_radius = cross_sectional_area / wetted_perimeter, 
+         discharge_cfs = 1.486 * cross_sectional_area * hydraulic_radius^(2/3) * slope^(1/2) * mannings_n^(-1)) %>%
+  bind_rows(tribble(~highwater, ~discharge_cfs, TRUE, peak_flow_dec_2022)) %>%
+  arrange(discharge_cfs) %>%
+  mutate(culvert_wse = zoo::na.approx(water_surface_elevation)) %>%
+  filter(highwater) %>% 
+  pull(culvert_wse)
+
+i580_wse <- seq(from=min(culvert_i580$gse)+0.1, to=max(culvert_i580$gse), by=0.1) %>% 
+  as_tibble() %>%
+  mutate(result = map(value, function(x){calc_xs(data = culvert_i580, water_elev=x)})) %>% 
+  unnest_wider(col = result) %>%
+  drop_na() %>%
+  mutate(slope = 0.010,
+         mannings_n = 0.016,
+         hydraulic_radius = cross_sectional_area / wetted_perimeter, 
+         discharge_cfs = 1.486 * cross_sectional_area * hydraulic_radius^(2/3) * slope^(1/2) * mannings_n^(-1)) %>%
+  bind_rows(tribble(~highwater, ~discharge_cfs, TRUE, peak_flow_dec_2022)) %>%
+  arrange(discharge_cfs) %>%
+  mutate(culvert_wse = zoo::na.approx(water_surface_elevation)) %>%
+  filter(highwater) %>% 
+  pull(culvert_wse)
+
+slopes_calc <- stations %>%
+  filter(!is.na(cross_section) | !is.na(culvert)) %>%
+  left_join(hwm_geometries %>% filter(peak_flow_date == ymd("2022-12-31"))) %>%
+  select(cross_section, culvert, station_1d, hwm_elevation, thalweg_elevation) %>%
+  left_join(tribble(~culvert, ~culvert_wse, ~culvert_gse,
+                    "Gleason", gleason_wse, min(culvert_gleason$gse),
+                    "I-580", i580_wse, min(culvert_i580$gse),
+                    )) %>%
+  mutate(hwm_elevation = case_when(is.na(hwm_elevation) ~ culvert_wse, TRUE ~ hwm_elevation),
+         thalweg_elevation = case_when(is.na(thalweg_elevation) ~ culvert_gse, TRUE ~ thalweg_elevation)) %>%
+  arrange(station_1d) %>%
+  mutate(wse_slope_from_ds = (hwm_elevation - lag(hwm_elevation, 1)) / (station_1d - lag(station_1d, 1)),
+         gse_slope_from_ds = (thalweg_elevation - lag(thalweg_elevation, 1)) / (station_1d - lag(station_1d, 1))) %>%
+  arrange(-station_1d) %>%
+  mutate(wse_slope_from_us = (hwm_elevation - lag(hwm_elevation, 1)) / (station_1d - lag(station_1d, 1)),
+         gse_slope_from_us = (thalweg_elevation - lag(thalweg_elevation, 1)) / (station_1d - lag(station_1d, 1))) %>%
+  mutate(wse_slope_from_ds = case_when(is.na(wse_slope_from_ds) ~ 0.010, TRUE ~ wse_slope_from_ds),
+         wse_slope_from_us = case_when(is.na(wse_slope_from_us) ~ 0.010, TRUE ~ wse_slope_from_us),
+         gse_slope_from_ds = case_when(is.na(gse_slope_from_ds) ~ 0.010, TRUE ~ gse_slope_from_ds),
+         gse_slope_from_us = case_when(is.na(gse_slope_from_us) ~ 0.010, TRUE ~ gse_slope_from_us),
+         floodplain = (wse_slope_from_ds + wse_slope_from_us) / 2,
+         channel = (gse_slope_from_ds + gse_slope_from_us) / 2
+         #floodplain = wse_slope_from_ds,
+         #channel = gse_slope_from_ds
+         ) %>%
+  # keep just the relevant features
+  select(cross_section, channel, floodplain) %>%
+  pivot_longer(cols = c(channel, floodplain), names_to = "series", values_to = "slope_calc") %>% drop_na()
+```
+
+    ## Joining with `by = join_by(cross_section)`
+    ## Joining with `by = join_by(culvert)`
+
+``` r
+slopes_calc
+```
+
+    ## # A tibble: 12 × 3
+    ##    cross_section series     slope_calc
+    ##    <chr>         <chr>           <dbl>
+    ##  1 B             channel       0.0117 
+    ##  2 B             floodplain    0.00423
+    ##  3 D             channel       0.00507
+    ##  4 D             floodplain    0.00587
+    ##  5 E             channel       0.00309
+    ##  6 E             floodplain    0.00549
+    ##  7 F             channel       0.00245
+    ##  8 F             floodplain    0.00551
+    ##  9 G             channel       0.00317
+    ## 10 G             floodplain    0.00536
+    ## 11 H             channel       0.00334
+    ## 12 H             floodplain    0.00583
+
 Calculate hydraulics based on hwm geometries and peak flows
 
 ``` r
@@ -456,6 +568,10 @@ hwm_hydraulics <- hwm_geometries %>%
   rename(cross_sectional_area_ft2 = cross_sectional_area,
          wetted_perimeter_ft = wetted_perimeter) %>%
   left_join(peak_flows) %>%
+  # TEST 8 MARCH 2023
+  left_join(slopes_calc) %>%
+  mutate(slope = slope_calc) %>%
+  # END TEST 8 MARCH 2023
   mutate(velocity_ft_s = discharge_cfs / cross_sectional_area_ft2,
          hydraulic_radius_ft = cross_sectional_area_ft2 / wetted_perimeter_ft,
          mannings_n = 1.486 * cross_sectional_area_ft2 * hydraulic_radius_ft^(2/3) 
@@ -481,37 +597,38 @@ hwm_hydraulics <- hwm_geometries %>%
 ```
 
     ## Joining with `by = join_by(peak_flow_date)`
+    ## Joining with `by = join_by(series, cross_section)`
 
 ``` r
 hwm_hydraulics
 ```
 
-    ## # A tibble: 16 × 26
-    ##    series     cross…¹ peak_flo…² hwm_e…³  slope xs_df    thalw…⁴ water…⁵ max_d…⁶
-    ##    <chr>      <chr>   <date>       <dbl>  <dbl> <list>     <dbl>   <dbl>   <dbl>
-    ##  1 channel    B       2019-02-13    356. 0.012  <tibble>    352.    356.    4.14
-    ##  2 channel    D       2019-02-13    353. 0.005  <tibble>    348.    353.    5.51
-    ##  3 channel    E       2019-02-13    352. 0.003  <tibble>    344.    352.    7.44
-    ##  4 channel    F       2022-11-11    346. 0.003  <tibble>    343.    346.    3.18
-    ##  5 channel    G       2022-11-11    344. 0.003  <tibble>    342.    344.    2.70
-    ##  6 channel    H       2019-02-13    343. 0.003  <tibble>    339.    343.    3.81
-    ##  7 floodplain B       2022-12-31    365. 0.0076 <tibble>    352.    365.   13.3 
-    ##  8 floodplain D       2022-12-31    361. 0.0019 <tibble>    348.    361.   13.3 
-    ##  9 floodplain E       2022-12-31    356. 0.0056 <tibble>    344.    356.   11.8 
-    ## 10 floodplain E       2023-01-14    357. 0.0063 <tibble>    344.    357.   12.6 
-    ## 11 floodplain F       2022-12-31    353. 0.0073 <tibble>    343.    353.   10.3 
-    ## 12 floodplain F       2023-01-14    354. 0.0075 <tibble>    343.    354.   10.7 
-    ## 13 floodplain G       2022-12-31    350. 0.008  <tibble>    342.    350.    8.45
-    ## 14 floodplain G       2023-01-14    351. 0.0077 <tibble>    342.    351.    8.96
-    ## 15 floodplain H       2022-12-31    347. 0.0023 <tibble>    339.    347.    7.63
-    ## 16 floodplain H       2023-01-14    347. 0.0019 <tibble>    339.    347.    8.00
-    ## # … with 17 more variables: cross_sectional_area_ft2 <dbl>,
-    ## #   wetted_perimeter_ft <dbl>, discharge_cfs <dbl>, velocity_ft_s <dbl>,
-    ## #   hydraulic_radius_ft <dbl>, mannings_n <dbl>, velocity_m_s <dbl>,
-    ## #   hydraulic_radius_m <dbl>, cross_sectional_area_m2 <dbl>,
-    ## #   critical_shields_number <dbl>, grain_size_mobilized_mm <dbl>,
-    ## #   grain_size_mobilized_phi <dbl>, shear_velocity_cm_s <dbl>,
-    ## #   settling_velocity_ndim <dbl>, grain_size_suspended_ndim <dbl>, …
+    ## # A tibble: 16 × 27
+    ##    series    cross…¹ peak_flo…² hwm_e…³   slope xs_df    thalw…⁴ water…⁵ max_d…⁶
+    ##    <chr>     <chr>   <date>       <dbl>   <dbl> <list>     <dbl>   <dbl>   <dbl>
+    ##  1 channel   B       2019-02-13    356. 0.0117  <tibble>    352.    356.    4.14
+    ##  2 channel   D       2019-02-13    353. 0.00507 <tibble>    348.    353.    5.51
+    ##  3 channel   E       2019-02-13    352. 0.00309 <tibble>    344.    352.    7.44
+    ##  4 channel   F       2022-11-11    346. 0.00245 <tibble>    343.    346.    3.18
+    ##  5 channel   G       2022-11-11    344. 0.00317 <tibble>    342.    344.    2.70
+    ##  6 channel   H       2019-02-13    343. 0.00334 <tibble>    339.    343.    3.81
+    ##  7 floodpla… B       2022-12-31    365. 0.00423 <tibble>    352.    365.   13.3 
+    ##  8 floodpla… D       2022-12-31    361. 0.00587 <tibble>    348.    361.   13.3 
+    ##  9 floodpla… E       2022-12-31    356. 0.00549 <tibble>    344.    356.   11.8 
+    ## 10 floodpla… E       2023-01-14    357. 0.00549 <tibble>    344.    357.   12.6 
+    ## 11 floodpla… F       2022-12-31    353. 0.00551 <tibble>    343.    353.   10.3 
+    ## 12 floodpla… F       2023-01-14    354. 0.00551 <tibble>    343.    354.   10.7 
+    ## 13 floodpla… G       2022-12-31    350. 0.00536 <tibble>    342.    350.    8.45
+    ## 14 floodpla… G       2023-01-14    351. 0.00536 <tibble>    342.    351.    8.96
+    ## 15 floodpla… H       2022-12-31    347. 0.00583 <tibble>    339.    347.    7.63
+    ## 16 floodpla… H       2023-01-14    347. 0.00583 <tibble>    339.    347.    8.00
+    ## # … with 18 more variables: cross_sectional_area_ft2 <dbl>,
+    ## #   wetted_perimeter_ft <dbl>, discharge_cfs <dbl>, slope_calc <dbl>,
+    ## #   velocity_ft_s <dbl>, hydraulic_radius_ft <dbl>, mannings_n <dbl>,
+    ## #   velocity_m_s <dbl>, hydraulic_radius_m <dbl>,
+    ## #   cross_sectional_area_m2 <dbl>, critical_shields_number <dbl>,
+    ## #   grain_size_mobilized_mm <dbl>, grain_size_mobilized_phi <dbl>,
+    ## #   shear_velocity_cm_s <dbl>, settling_velocity_ndim <dbl>, …
 
 Bankfull estimates (need to fix flow freq calc though)
 
@@ -543,13 +660,13 @@ Bankfull estimates (need to fix flow freq calc though)
 View RAS 1D results
 
 ``` r
-ras_1d <- read_csv("data/hec_ras_1d_out_v2.csv") %>%
+ras_1d <- read_csv("data/hec_ras_1d_out_v3.csv") %>%
   janitor::clean_names() %>% 
   left_join(cross_sections, by = join_by(river_sta == station_1d)) %>%
   mutate(peak_flow_date = dmy(profile))
 ```
 
-    ## Rows: 80 Columns: 18
+    ## Rows: 88 Columns: 18
     ## ── Column specification ────────────────────────────────────────────────────────
     ## Delimiter: ","
     ## chr  (2): Reach, Profile
@@ -561,7 +678,7 @@ ras_1d <- read_csv("data/hec_ras_1d_out_v2.csv") %>%
     ## Warning: There was 1 warning in `mutate()`.
     ## ℹ In argument: `peak_flow_date = dmy(profile)`.
     ## Caused by warning:
-    ## !  32 failed to parse.
+    ## !  40 failed to parse.
 
 ``` r
 ras_1d_xs <- ras_1d %>% 
@@ -619,20 +736,20 @@ ras_1d_sed <- ras_1d_pivot %>%
 ras_1d_sed
 ```
 
-    ## # A tibble: 181 × 26
+    ## # A tibble: 206 × 26
     ##    reach   river…¹ profile loc   disch…² cross…³ hydra…⁴ cross…⁵ min_c…⁶ w_s_e…⁷
     ##    <chr>     <dbl> <chr>   <chr>   <dbl>   <dbl>   <dbl> <chr>     <dbl>   <dbl>
-    ##  1 Gleaso…   10800 Q2      total  650     107.      2.82 B          352.    357.
-    ##  2 Gleaso…   10800 Q2      chan…  650     107.      2.82 B          352.    357.
-    ##  3 Gleaso…   10800 Q5      total 1200     179.      3.73 B          352.    359.
-    ##  4 Gleaso…   10800 Q5      chan… 1200.    179.      3.9  B          352.    359.
-    ##  5 Gleaso…   10800 Q5      right    0.03    0.16    0.08 B          352.    359.
-    ##  6 Gleaso…   10800 Q100 F… total 4300     404.      3.83 B          352.    362.
-    ##  7 Gleaso…   10800 Q100 F… chan… 4111.    314.      5.64 B          352.    362.
-    ##  8 Gleaso…   10800 Q100 F… left     0.43    1.06    0.17 B          352.    362.
-    ##  9 Gleaso…   10800 Q100 F… right  188.     89.4     2.04 B          352.    362.
-    ## 10 Gleaso…   10800 Q100 AC total 5200     495.      4    B          352.    363.
-    ## # … with 171 more rows, 16 more variables: e_g_slope_ft_ft <dbl>,
+    ##  1 Gleaso…   10800 Q2 BKF  total  650     114.      2.92 B          352.    357.
+    ##  2 Gleaso…   10800 Q2 BKF  chan…  650     114.      2.92 B          352.    357.
+    ##  3 Gleaso…   10800 Q5 Cha… total 1200     197.      3.12 B          352.    359.
+    ##  4 Gleaso…   10800 Q5 Cha… chan… 1198.    194.      4.09 B          352.    359.
+    ##  5 Gleaso…   10800 Q5 Cha… right    1.56    3.53    0.22 B          352.    359.
+    ##  6 Gleaso…   10800 Q100 B… total 4300     619.      4.66 B          352.    364.
+    ##  7 Gleaso…   10800 Q100 B… chan… 3784.    408.      7.24 B          352.    364.
+    ##  8 Gleaso…   10800 Q100 B… left    55.1    34.4     1.56 B          352.    364.
+    ##  9 Gleaso…   10800 Q100 B… right  461.    177.      3.24 B          352.    364.
+    ## 10 Gleaso…   10800 Q100 AC total 5200     724.      5.2  B          352.    364.
+    ## # … with 196 more rows, 16 more variables: e_g_slope_ft_ft <dbl>,
     ## #   q_total_cfs <dbl>, series <chr>, velocity_ft_s <dbl>, slope <dbl>,
     ## #   velocity_m_s <dbl>, hydraulic_radius_m <dbl>,
     ## #   cross_sectional_area_m2 <dbl>, critical_shields_number <dbl>,
@@ -676,7 +793,7 @@ mannings_n %>%
   geom_hline(yintercept = 0.12, color = "red", linetype = "dashed") 
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
 
 ``` r
 # add chan and heard estimates
@@ -731,7 +848,7 @@ ggplot() +
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
 
 ``` r
 print(bankfull_q)
@@ -740,12 +857,12 @@ print(bankfull_q)
     ## # A tibble: 6 × 8
     ##   cross_section bankfull_wse thalweg_e…¹ bankf…² bf_al…³ bf_beta bankf…⁴ bankf…⁵
     ##   <chr>                <dbl>       <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>
-    ## 1 B                     359.        352.    7.5    23.6     2.15   1796.   17.2 
-    ## 2 D                     357.        348.    9.59    6.43    2.51   1867.   18.7 
-    ## 3 E                     353.        344.    8.41    1.88    3.04   1221.    7.72
-    ## 4 F                     350.        343.    7.09    2.40    3.09   1016.    5.27
-    ## 5 G                     346.        342.    4.66    5.92    3.14    742.    2.74
-    ## 6 H                     343.        339.    3.77   26.6     2.30    562.    1.53
+    ## 1 B                     359.        352.    7.5    24.4     2.02   1431.   10.7 
+    ## 2 D                     357.        348.    9.59    6.26    2.52   1864.   18.6 
+    ## 3 E                     353.        344.    8.41    2.09    2.99   1226.    7.79
+    ## 4 F                     350.        343.    7.09    2.44    3.11   1072.    5.89
+    ## 5 G                     346.        342.    4.66    5.79    3.16    754.    2.83
+    ## 6 H                     343.        339.    3.77   26.7     2.30    566.    1.56
     ## # … with abbreviated variable names ¹​thalweg_elevation, ²​bankfull_depth,
     ## #   ³​bf_alpha, ⁴​bankfull_discharge, ⁵​bankfull_discharge_ri
 
@@ -772,14 +889,14 @@ ras_1d_xs %>%
     ## Joining with `by = join_by(cross_section)`
 
     ## # A tibble: 6 × 3
-    ##   cross_section `Q100 FEMA` `Q100 AC`
-    ##   <chr>               <dbl>     <dbl>
-    ## 1 B                    8.33      7.53
-    ## 2 D                    4.38      3.66
-    ## 3 E                    3.41      2.73
-    ## 4 F                    1.87      1.39
-    ## 5 G                    4.19      3.29
-    ## 6 H                    3.64      2.63
+    ##   cross_section `Q100 BKF` `Q100 AC`
+    ##   <chr>              <dbl>     <dbl>
+    ## 1 B                   6.53      5.72
+    ## 2 D                   4.51      3.84
+    ## 3 E                   3.41      2.73
+    ## 4 F                   2.17      1.75
+    ## 5 G                   4.24      3.33
+    ## 6 H                   3.63      2.62
 
 Sediment transport plots
 
@@ -794,7 +911,7 @@ hwm_hydraulics %>%
   ggtitle("Sediment transport estimates based on high water marks")
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->
 
 ``` r
 breaks <- ras_1d_sed %>% group_by(profile, q_total_cfs) %>% summarize() %>% as.list()
@@ -817,7 +934,7 @@ ras_1d_sed %>%
   theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-26-1.png)<!-- -->
 
 ``` r
 ras_1d_sed %>% 
@@ -838,7 +955,7 @@ ras_1d_sed %>%
   theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-25-2.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-26-2.png)<!-- -->
 
 ``` r
 ras_1d_sed %>% 
@@ -860,7 +977,7 @@ ras_1d_sed %>%
   theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0)) 
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-25-3.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-26-3.png)<!-- -->
 
 ``` r
 ras_1d_sed %>% 
@@ -883,7 +1000,7 @@ ras_1d_sed %>%
   scale_y_continuous(breaks = c(0, 1.5, 3, 4, 6, 10)) 
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-26-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-27-1.png)<!-- -->
 
 # View RAS 2D results
 
@@ -1052,7 +1169,7 @@ ggplot() +
 
     ## Warning: Removed 2 rows containing missing values (`geom_point()`).
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-30-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-31-1.png)<!-- -->
 
 ``` r
 ggplot() + 
@@ -1075,7 +1192,7 @@ ggplot() +
     ## Removed 23 rows containing missing values (`geom_line()`).
     ## Removed 23 rows containing missing values (`geom_line()`).
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-31-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-32-1.png)<!-- -->
 
 ``` r
 ras_1d %>% 
@@ -1091,9 +1208,9 @@ ras_1d %>%
 
     ## Joining with `by = join_by(cross_section, peak_flow_date)`
 
-    ## Warning: Removed 48 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 56 rows containing missing values (`geom_point()`).
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-32-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-33-1.png)<!-- -->
 
 ``` r
 # summarize at-a-station hydraulics for 2D results
@@ -1149,16 +1266,16 @@ ras_2d_hydraulics %>%
   )
 ```
 
-    ## # A tibble: 6 × 28
-    ##   station_2d wse_2d   slope cross_sec…¹ stati…² xs_df    thalw…³ water…⁴ max_d…⁵
-    ##        <dbl>  <dbl>   <dbl> <chr>         <dbl> <list>     <dbl>   <dbl>   <dbl>
-    ## 1        490   364. 0.00600 B             10800 <tibble>    352.    364.   12.3 
-    ## 2       1210   361. 0.00467 D             10200 <tibble>    348.    361.   12.8 
-    ## 3       2061   357. 0.00967 E              9300 <tibble>    344.    357.   12.4 
-    ## 4       2568   354. 0.00133 F              8800 <tibble>    343.    354.   10.7 
-    ## 5       3157   351. 0.00733 G              8200 <tibble>    342.    351.    9.42
-    ## 6       3828   348. 0.00533 H              7600 <tibble>    339.    348.    8.21
-    ## # … with 19 more variables: cross_sectional_area_ft2 <dbl>,
+    ## # A tibble: 6 × 29
+    ##   station_2d wse_2d   slope cross_sec…¹ stati…² culvert xs_df    thalw…³ water…⁴
+    ##        <dbl>  <dbl>   <dbl> <chr>         <dbl> <chr>   <list>     <dbl>   <dbl>
+    ## 1        490   364. 0.00600 B             10800 <NA>    <tibble>    352.    364.
+    ## 2       1210   361. 0.00467 D             10200 <NA>    <tibble>    348.    361.
+    ## 3       2061   357. 0.00967 E              9300 <NA>    <tibble>    344.    357.
+    ## 4       2568   354. 0.00133 F              8800 <NA>    <tibble>    343.    354.
+    ## 5       3157   351. 0.00733 G              8200 <NA>    <tibble>    342.    351.
+    ## 6       3828   348. 0.00533 H              7600 <NA>    <tibble>    339.    348.
+    ## # … with 20 more variables: max_depth <dbl>, cross_sectional_area_ft2 <dbl>,
     ## #   wetted_perimeter_ft <dbl>, hwm_elevation <dbl>, hwm_difference <dbl>,
     ## #   discharge_cfs <dbl>, velocity_ft_s <dbl>, hydraulic_radius_ft <dbl>,
     ## #   mannings_n <dbl>, velocity_m_s <dbl>, hydraulic_radius_m <dbl>,

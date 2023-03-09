@@ -72,7 +72,7 @@ new_years_storm_pred <- new_years_storm %>%
   mutate(streamflow_cfs_pred = rating_curve(stage_ft))
 
 # version 2 of the rating curve using stepwise interpolation based on the I-580 HWM
-peak_flow_jan_2023 <- 3657
+peak_flow_jan_2023 <- 3524
 
 rating_curve <- new_years_storm %>% 
   select(c(streamflow_cfs, stage_ft)) %>% 
@@ -193,7 +193,7 @@ ggplot() +
 ```{r}
 peak_flows <- tribble(
   ~peak_flow_date, ~discharge_cfs,
-  ymd("2019-02-13"), 560,
+  ymd("2019-02-13"), 561,
   ymd("2022-11-11"), 105,
   ymd("2022-12-31"), peak_flow_dec_2022,
   ymd("2023-01-14"), peak_flow_jan_2023
@@ -242,19 +242,19 @@ ggplot() +
 
 ```{r}
 stations <- tribble(
-  ~cross_section, ~station_1d, ~station_2d,
-   NA,    NA,    0, # US boundary
-   NA, 11300,   26, # gleason apron toe
-  "B", 10800,  490,    
-   NA, 10400,   NA, # pedestrian path
-  "D", 10200, 1210,     
-  "E",  9300, 2061,     
-  "F",  8800, 2568,    
-  "G",  8200, 3157,    
-  "H",  7600, 3828,  
-   NA,  6900,   NA, # 580 frontage apron head
-   NA,  6800,   NA, # 580 underpass
-   NA,    NA, 4507  # DS boundary
+  ~cross_section, ~station_1d, ~station_2d, ~culvert,
+   NA,    NA,    0, NA, # US boundary
+   NA, 11300,   26, "Gleason",# gleason apron toe
+  "B", 10800,  490, NA,    
+   NA, 10400,   NA, NA, # pedestrian path
+  "D", 10200, 1210, NA,     
+  "E",  9300, 2061, NA,     
+  "F",  8800, 2568, NA,    
+  "G",  8200, 3157, NA,    
+  "H",  7600, 3828, NA,  
+   NA,  6900,   NA, NA, # 580 frontage apron head
+   NA,  6800,   NA, "I-580",# 580 underpass
+   NA,    NA, 4507, NA,  # DS boundary
 )
 
 cross_sections <- stations %>% drop_na(cross_section)
@@ -338,6 +338,13 @@ xs_g <- read_csv("data/xs_geom/xs_g.csv") %>%
 xs_h <- read_csv("data/xs_geom/xs_h.csv") %>%
   prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) 
 
+culvert_gleason <- read_csv("data/xs_geom/culvert_gleason.csv") %>%
+  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) 
+
+culvert_i580 <- read_csv("data/xs_geom/culvert_i580.csv") %>%
+  prep_xs(sta = station_left_bank_ft, elev = elevation_ngvd29_ft, delta_x = 0.1) 
+
+
 xs_dfs <- tribble(
   ~xs_id, ~xs_df,
   "B", xs_b,
@@ -385,6 +392,76 @@ thalweg_elevations <- xs_dfs %>%
   select(xs_id, thalweg_elevation)
 ```
 
+
+Estimate slopes to use in 1d hydraulics.
+For channels, use normal depth assumption and calc avg ground slope. For floodplain, use the Dec 2022 HWMs.
+```{r}
+hwm_geometries %>% filter(peak_flow_date == ymd("2022-12-31"))
+
+gleason_wse <- seq(from=min(culvert_gleason$gse)+0.1, to=max(culvert_gleason$gse), by=0.1) %>% 
+  as_tibble() %>%
+  mutate(result = map(value, function(x){calc_xs(data = culvert_gleason, water_elev=x)})) %>% 
+  unnest_wider(col = result) %>%
+  drop_na() %>%
+  mutate(slope = 0.010,
+         mannings_n = 0.016,
+         hydraulic_radius = cross_sectional_area / wetted_perimeter, 
+         discharge_cfs = 1.486 * cross_sectional_area * hydraulic_radius^(2/3) * slope^(1/2) * mannings_n^(-1)) %>%
+  bind_rows(tribble(~highwater, ~discharge_cfs, TRUE, peak_flow_dec_2022)) %>%
+  arrange(discharge_cfs) %>%
+  mutate(culvert_wse = zoo::na.approx(water_surface_elevation)) %>%
+  filter(highwater) %>% 
+  pull(culvert_wse)
+
+i580_wse <- seq(from=min(culvert_i580$gse)+0.1, to=max(culvert_i580$gse), by=0.1) %>% 
+  as_tibble() %>%
+  mutate(result = map(value, function(x){calc_xs(data = culvert_i580, water_elev=x)})) %>% 
+  unnest_wider(col = result) %>%
+  drop_na() %>%
+  mutate(slope = 0.010,
+         mannings_n = 0.016,
+         hydraulic_radius = cross_sectional_area / wetted_perimeter, 
+         discharge_cfs = 1.486 * cross_sectional_area * hydraulic_radius^(2/3) * slope^(1/2) * mannings_n^(-1)) %>%
+  bind_rows(tribble(~highwater, ~discharge_cfs, TRUE, peak_flow_dec_2022)) %>%
+  arrange(discharge_cfs) %>%
+  mutate(culvert_wse = zoo::na.approx(water_surface_elevation)) %>%
+  filter(highwater) %>% 
+  pull(culvert_wse)
+
+slopes_calc <- stations %>%
+  filter(!is.na(cross_section) | !is.na(culvert)) %>%
+  left_join(hwm_geometries %>% filter(peak_flow_date == ymd("2022-12-31"))) %>%
+  select(cross_section, culvert, station_1d, hwm_elevation, thalweg_elevation) %>%
+  left_join(tribble(~culvert, ~culvert_wse, ~culvert_gse,
+                    "Gleason", gleason_wse, min(culvert_gleason$gse),
+                    "I-580", i580_wse, min(culvert_i580$gse),
+                    )) %>%
+  mutate(hwm_elevation = case_when(is.na(hwm_elevation) ~ culvert_wse, TRUE ~ hwm_elevation),
+         thalweg_elevation = case_when(is.na(thalweg_elevation) ~ culvert_gse, TRUE ~ thalweg_elevation)) %>%
+  arrange(station_1d) %>%
+  mutate(wse_slope_from_ds = (hwm_elevation - lag(hwm_elevation, 1)) / (station_1d - lag(station_1d, 1)),
+         gse_slope_from_ds = (thalweg_elevation - lag(thalweg_elevation, 1)) / (station_1d - lag(station_1d, 1))) %>%
+  arrange(-station_1d) %>%
+  mutate(wse_slope_from_us = (hwm_elevation - lag(hwm_elevation, 1)) / (station_1d - lag(station_1d, 1)),
+         gse_slope_from_us = (thalweg_elevation - lag(thalweg_elevation, 1)) / (station_1d - lag(station_1d, 1))) %>%
+  mutate(wse_slope_from_ds = case_when(is.na(wse_slope_from_ds) ~ 0.010, TRUE ~ wse_slope_from_ds),
+         wse_slope_from_us = case_when(is.na(wse_slope_from_us) ~ 0.010, TRUE ~ wse_slope_from_us),
+         gse_slope_from_ds = case_when(is.na(gse_slope_from_ds) ~ 0.010, TRUE ~ gse_slope_from_ds),
+         gse_slope_from_us = case_when(is.na(gse_slope_from_us) ~ 0.010, TRUE ~ gse_slope_from_us),
+         floodplain = (wse_slope_from_ds + wse_slope_from_us) / 2,
+         channel = (gse_slope_from_ds + gse_slope_from_us) / 2
+         #floodplain = wse_slope_from_ds,
+         #channel = gse_slope_from_ds
+         ) %>%
+  # keep just the relevant features
+  select(cross_section, channel, floodplain) %>%
+  pivot_longer(cols = c(channel, floodplain), names_to = "series", values_to = "slope_calc") %>% drop_na()
+
+slopes_calc
+
+```
+
+
 Calculate hydraulics based on hwm geometries and peak flows
 
 ```{r}
@@ -392,6 +469,10 @@ hwm_hydraulics <- hwm_geometries %>%
   rename(cross_sectional_area_ft2 = cross_sectional_area,
          wetted_perimeter_ft = wetted_perimeter) %>%
   left_join(peak_flows) %>%
+  # TEST 8 MARCH 2023
+  left_join(slopes_calc) %>%
+  mutate(slope = slope_calc) %>%
+  # END TEST 8 MARCH 2023
   mutate(velocity_ft_s = discharge_cfs / cross_sectional_area_ft2,
          hydraulic_radius_ft = cross_sectional_area_ft2 / wetted_perimeter_ft,
          mannings_n = 1.486 * cross_sectional_area_ft2 * hydraulic_radius_ft^(2/3) 
@@ -449,7 +530,7 @@ Bankfull estimates (need to fix flow freq calc though)
 View RAS 1D results
 
 ```{r}
-ras_1d <- read_csv("data/hec_ras_1d_out_v2.csv") %>%
+ras_1d <- read_csv("data/hec_ras_1d_out_v3.csv") %>%
   janitor::clean_names() %>% 
   left_join(cross_sections, by = join_by(river_sta == station_1d)) %>%
   mutate(peak_flow_date = dmy(profile))
