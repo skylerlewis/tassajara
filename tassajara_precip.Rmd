@@ -124,7 +124,7 @@ daily_data_pred %>%
     scale_x_discrete(name = "Day of Water Year Max 24h Precipitation") +
     scale_y_continuous(name = "Maximum 24h precipitation (inches)", expand = c(0, 0), limits = c(0, 10)) +
     ggtitle("Maximum 24h precipitation (inches) at Tassajara") + 
-    scale_fill_viridis_c(direction = -1) + 
+    scale_fill_viridis_c(direction = -1, option = "cividis") + 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
   theme(legend.position = "none")
 
@@ -142,7 +142,7 @@ daily_data_pred %>%
     scale_x_discrete(name = "Water Year") +
     scale_y_continuous(name = "Total annual precipitation (inches)", expand = c(0, 0), limits = c(0, 40)) +
     ggtitle("Total annual precipitation (inches) at Tassajara") + 
-    scale_fill_viridis_c(direction = -1) + 
+    scale_fill_viridis_c(direction = -1, option = "cividis") + 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
   theme(legend.position = "none")
 
@@ -186,7 +186,7 @@ rolling24h_pred %>%
     scale_x_discrete(name = "Day of Water Year Max 24h Precipitation") +
     scale_y_continuous(name = "Maximum 24h precipitation (inches)", expand = c(0, 0), limits = c(0, 20)) +
     ggtitle("Maximum 24h precipitation (inches) at Tassajara") + 
-    scale_fill_viridis_c(direction = -1) + 
+    scale_fill_viridis_c(direction = -1, option = "cividis") + 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
   theme(legend.position = "none")
 
@@ -214,7 +214,7 @@ prism_monthly %>%
   ggplot(aes(y = ppt_inches, x = date %m+% months(3), fill = ppt_inches)) + 
     geom_col() +
     scale_y_continuous(name = "Monthly total precipitation (inches)", expand = c(0, 0), limits = c(0, 15)) +
-    ggtitle("PRISM historical precipitation for Lower Tassajara Creek") + scale_fill_viridis_c(direction = -1)  + 
+    ggtitle("PRISM historical precipitation for Lower Tassajara Creek") + scale_fill_viridis_c(direction = -1, option = "cividis")  + 
   theme(legend.position = "none")
 ```
 
@@ -237,11 +237,11 @@ prism_yearly %>%
     geom_col(width = 1) +
     geom_text(aes(label = case_when(water_year %in% prism_yearly_top$water_year ~ paste(water_year, ppt_inches, sep = "\n"), TRUE ~ NA)), vjust=-0.25) +
     #scale_fill_brewer()
-    scale_fill_viridis_d(direction = -1) +
+    scale_fill_viridis_d(direction = -1, option = "viridis", name = "Quartile of anual precip.") +
     scale_x_continuous(name ="Water Year", breaks = seq(1890, 2020, by = 10), expand = c(0,0)) +
     scale_y_continuous(name = "Annual total precipitation (inches)", expand = c(0, 0), limits = c(0, 50)) +
-    ggtitle("PRISM historical precipitation for Lower Tassajara Creek")  + 
-  theme(legend.position = "none")
+    #ggtitle("PRISM historical precipitation for Lower Tassajara Creek")  + 
+  theme(legend.position = "top")
 
 ``` 
 
@@ -261,13 +261,14 @@ prism_monthly  %>%
             mean_temp_max = mean(tmax_degrees_f)) %>%
   ggplot(aes(x = time_month)) + 
   geom_col(aes(y = mean_precip, group = 1, fill = mean_precip), width=1) + 
-  #geom_text(aes(y = mean_precip, label = round(mean_precip,2), group = 1)) + 
+  geom_text(aes(y = mean_precip+0.15, label = round(mean_precip,2), group = 1)) + 
   geom_point(aes(y = mean_temp/coeff, group = 1)) + 
   geom_line(aes(y = mean_temp/coeff, group = 1)) + 
   #geom_ribbon(aes(ymin = mean_temp_min/coeff, ymax = mean_temp_max/coeff, group = 1)) +
-  scale_y_continuous(name = "precip", sec.axis = sec_axis(trans = ~.*coeff, name = "temp"), expand = c(0,0)) + 
-  ggtitle("PRISM monthly average precipitation and temperature") +
-  scale_fill_viridis_c(direction = -1) + geom_vline(xintercept=9.5, linetype="dashed") + 
+  scale_y_continuous(name = "Mean monthly precipitation (in)", limits = c(0, 4), sec.axis = sec_axis(trans = ~.*coeff, name = "Mean monthly temperature (°F)"), expand = c(0,0)) + 
+  scale_x_discrete(name = "") +
+  #ggtitle("PRISM monthly average precipitation and temperature") +
+  scale_fill_viridis_c(direction = -1, option = "viridis") + geom_vline(xintercept=9.5, linetype="dashed") + 
   theme(legend.position = "none")
   
 ```
