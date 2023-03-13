@@ -606,3 +606,115 @@ ndvi_time_series %>%
     ## `geom_smooth()` using formula = 'y ~ x'
 
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
+
+# crosstab of NDVI and relative elevation
+
+``` r
+aoi <- sf::st_read("data/tassajara_perim_50ft.kml") %>% 
+  terra::vect() # convert from sf into terra vector
+```
+
+    ## Reading layer `alamedaco_parcels_perimeter_buffer50ft' from data source 
+    ##   `C:\Users\skylerlewis\Documents\GitHub\tassajara\data\tassajara_perim_50ft.kml' 
+    ##   using driver `KML'
+    ## Simple feature collection with 1 feature and 2 fields
+    ## Geometry type: MULTIPOLYGON
+    ## Dimension:     XYZ
+    ## Bounding box:  xmin: -121.8803 ymin: 37.7012 xmax: -121.8777 ymax: 37.71252
+    ## z_range:       zmin: 0 zmax: 0
+    ## Geodetic CRS:  WGS 84
+
+``` r
+naip_scale <- terra::rast("data/raster/naip_scale.tif") %>% 
+  terra::classify(cbind(0, NA))  # mask zeros
+naip_offset <- terra::rast("data/raster/naip_offset.tif") %>% 
+  terra::classify(cbind(0, NA))  # mask zeros
+rem <- terra::rast("data/raster/lidar2021_REM.tif") %>% 
+  terra::project(naip_scale) %>% # reproject to same crs
+  terra::mask(aoi)
+
+terra::plot(rem)
+```
+
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
+
+``` r
+# categorical crosstab
+terra::crosstab(c(
+  naip_scale %>% terra::classify(seq(from=0, to=1, by=0.01)),
+  rem %>% terra::classify(seq(from=0, to=30, by=1))
+))
+```
+
+    ##              Band_1
+    ## naip_scale    (0–1] (1–2] (10–11] (11–12] (12–13] (13–14] (14–15] (15–16]
+    ##   (0–0.01]    18083 10561   15874   28283   39757   41866   35467   34948
+    ##   (0.01–0.02]  9691  5634   10161   13317   16138   18160   14189   13774
+    ##   (0.02–0.03]  3906  2555    7851   10478   10459   12069    9323    9083
+    ##   (0.03–0.04]  1677  1320    5712    8014    8199    8192    7222    7649
+    ##   (0.04–0.05]   769   518    3722    5489    6261    5550    5437    5739
+    ##   (0.05–0.06]   398   300    1637    2738    4163    3431    3731    4144
+    ##   (0.06–0.07]   103    12     580    1325    1979    2031    2146    2308
+    ##   (0.07–0.08]    10     0     162     364     778     721     835     883
+    ##   (0.08–0.09]     0     0      71      59     131     130      93     221
+    ##   (0.09–0.1]      0     0      57       0       3       5       0      15
+    ##   (0.1–0.11]      0     0      16       0       0       0       0       0
+    ##              Band_1
+    ## naip_scale    (16–17] (17–18] (18–19] (19–20] (2–3] (20–21] (21–22] (22–23]
+    ##   (0–0.01]      33485   23506   11832    9239 10778    9261    2015     803
+    ##   (0.01–0.02]   12330   11838    7153    3767  5375    2556     678     112
+    ##   (0.02–0.03]    8510    7560    4844    2301  2002    1670     511      21
+    ##   (0.03–0.04]    5562    4326    3342    1571   940    1075     524      11
+    ##   (0.04–0.05]    3399    2873    2404    1196   309     747     329       1
+    ##   (0.05–0.06]    1930    2308    1351     725   101     372     244       0
+    ##   (0.06–0.07]     745    1758     575     391    47     185     152       0
+    ##   (0.07–0.08]     209     216     242     366     0      37     267       0
+    ##   (0.08–0.09]      46      42      50     232     0       9      73       0
+    ##   (0.09–0.1]        0       2       0       0     0       0       0       0
+    ##   (0.1–0.11]        0       0       0       0     0       0       0       0
+    ##              Band_1
+    ## naip_scale    (23–24] (24–25] (25–26] (26–27] (27–28] (3–4] (4–5] (5–6] (6–7]
+    ##   (0–0.01]        578     290     247     178      78 16959 25898 24895 30801
+    ##   (0.01–0.02]     217      39      26      50      30  7708 13453 13993 19799
+    ##   (0.02–0.03]      94       0       7      13       5  3179  7053  7679 12560
+    ##   (0.03–0.04]      34       0       5      18       5  1439  3598  4648  6447
+    ##   (0.04–0.05]       2       0       0       7       2   698  1426  2548  2253
+    ##   (0.05–0.06]       1       0       0       0       0   192   374   848   753
+    ##   (0.06–0.07]       0       0       0       0       0    44    81    97   188
+    ##   (0.07–0.08]       0       0       0       0       0     0    19     5    27
+    ##   (0.08–0.09]       0       0       0       0       0     0     0     0     0
+    ##   (0.09–0.1]        0       0       0       0       0     0     0     0     0
+    ##   (0.1–0.11]        0       0       0       0       0     0     0     0     0
+    ##              Band_1
+    ## naip_scale    (7–8] (8–9] (9–10]
+    ##   (0–0.01]    38098 21724  15229
+    ##   (0.01–0.02] 26298 15293  11581
+    ##   (0.02–0.03] 17446 10799   7928
+    ##   (0.03–0.04] 10396  7180   4777
+    ##   (0.04–0.05]  4344  3243   2613
+    ##   (0.05–0.06]  1297   997    914
+    ##   (0.06–0.07]   245   146    151
+    ##   (0.07–0.08]    25     1     39
+    ##   (0.08–0.09]     0     0     25
+    ##   (0.09–0.1]      0     0     13
+    ##   (0.1–0.11]      0     0      9
+
+``` r
+# # scatterplot
+# terra::plot(rem[[1]], naip_scale[[1]])
+ 
+rem_zones <- rem %>% terra::classify(c(0, 4, 8, 12))
+naip_scale %>% terra::boxplot(rem_zones)
+```
+
+    ## Warning: [boxplot] taking a regular sample of 1e+05 cells
+
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-21-2.png)<!-- -->
+
+``` r
+naip_offset %>% terra::boxplot(rem_zones)
+```
+
+    ## Warning: [boxplot] taking a regular sample of 1e+05 cells
+
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-21-3.png)<!-- -->

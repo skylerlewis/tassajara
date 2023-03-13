@@ -105,7 +105,7 @@ maxRange <- 5000
 coeff <- 0.0005
 
 new_years_storm_pred %>% 
-  filter(result_datetime < ymd("2023-01-23")) %>%
+  filter(result_datetime < ymd("2023-01-23")) %>% #23")) %>%
   ggplot(aes(x = result_datetime)) +
   geom_area(aes(y = streamflow_cfs_pred, 
                 fill = "q_pred")) + 
@@ -113,7 +113,7 @@ new_years_storm_pred %>%
                 fill = "q")) +
   geom_tile(aes(y = maxRange - rain_intensity_in/coeff/2, 
                 height = rain_intensity_in/coeff, 
-                fill = "precip")) +
+                color = "precip", fill = "precip")) +
   scale_y_continuous(name = "streamflow (cfs)",
                      limit = c(0, maxRange),
                      expand = c(0, 0),
@@ -121,11 +121,15 @@ new_years_storm_pred %>%
                                          name = "precipitation (in/hr)")) +
   theme(legend.position = 'top') + 
   ggtitle("Dec 2022 - Jan 2023 rainfall and streamflow") +
-  geom_hline(yintercept = 650 , linetype = "dashed") + annotate("text", x=as.POSIXct(ymd("2023-01-21")), y=650 , label="Q2 = 650 cfs") +
-  geom_hline(yintercept = 1200, linetype = "dashed") + annotate("text", x=as.POSIXct(ymd("2023-01-21")), y=1200, label="Q5 = 1200 cfs") +
+  geom_hline(yintercept = 650 , linetype = "dashed") + annotate("text", x=as.POSIXct(ymd("2023-01-21")), y=100+650 , label="Q2 = 650 cfs") +
+  geom_hline(yintercept = 1200, linetype = "dashed") + annotate("text", x=as.POSIXct(ymd("2023-01-21")), y=100+1200, label="Q5 = 1200 cfs") +
   scale_fill_manual(values = c("precip" = "blue", "q" = "black", "q_pred" = "red"),
                     labels = c("precip" = "Precipitation", "q" = "Streamflow (gauged)", "q_pred" = "Streamflow (predicted)"),
-                    name = NULL) 
+                    name = NULL) +
+  scale_color_manual(values = c("precip" = "blue", "q" = "black", "q_pred" = "red"),
+                    labels = c("precip" = "Precipitation", "q" = "Streamflow (gauged)", "q_pred" = "Streamflow (predicted)"),
+                    name = NULL) +
+  scale_x_datetime(date_breaks = "days" , date_labels = "%d")  #\n%b") + 
 
 ```
 
@@ -186,6 +190,58 @@ ggplot() +
   scale_size_manual(values = c(2, 1, 2, 1)) + 
   scale_linetype_manual(values = c("solid", "dashed", "dashed", "dashed")) + 
   theme(legend.position = "top")
+```
+Examine specific storms
+```{r}
+
+max_range_left <- 1
+max_range_right <- 20
+coeff <- max_range_right/max_range_left
+
+new_years_storm_class <- new_years_storm_pred %>%
+  filter(result_datetime < ymd("2023-01-23")) %>%
+  mutate(storm = as.factor(case_when(
+                           result_datetime < ymd_hms("2023-01-02 00:00:00") ~ "1",
+                           result_datetime < ymd_hms("2023-01-07 00:00:00") ~ "2",
+                           result_datetime < ymd_hms("2023-01-09 18:00:00") ~ NA,
+                           result_datetime < ymd_hms("2023-01-13 00:00:00") ~ NA,
+                           result_datetime < ymd_hms("2023-01-17 00:00:00") ~ "5",
+                             TRUE ~ NA
+  )))
+
+new_years_storm_class_summary <- new_years_storm_class %>% group_by(storm) %>% summarize(max_intensity = max(rain_intensity_in),
+                                                        total_precip = sum(rain_interval_in),
+                                                        max_stage = max(stage_ft),
+                                                        max_streamflow = max(streamflow_cfs_pred),
+                                                        peak_rainfall_dt = result_datetime[which.max(rain_interval_in)],
+                                                        peak_runoff_dt = result_datetime[which.max(stage_ft)],
+                                                        #lag_time = as.duration(peak_runoff_dt - peak_rainfall_dt)
+                                                        ) %>%
+  mutate(storm_label = paste0(
+                              total_precip, " in total", "\n", 
+                              max_intensity, " in/hr max.", "\n",
+                              peak_rainfall_dt
+                              ))
+
+new_years_storm_class %>% ggplot(aes(x = result_datetime)) + 
+  geom_col(aes(y = rain_intensity_in, color = storm, fill = storm)) +
+  geom_line(aes(y = rain_wy_in/coeff)) +
+  scale_x_datetime(date_breaks = "days" , date_labels = "%d") + #\n%b") + 
+  scale_y_continuous(name = "precipitation intensity (in/hr)",
+                   limit = c(0, max_range_left),
+                   expand = c(0, 0),
+                   sec.axis = sec_axis(trans = ~.*coeff, 
+                                       name = "water year cumulative precip (in)")) + 
+  geom_point(data = new_years_storm_class_summary %>% filter(storm %in% c(1, 2, 5)), 
+             aes(y = max_intensity, x = peak_rainfall_dt, color = storm)) + 
+  geom_text(data = new_years_storm_class_summary %>% filter(storm %in% c(1, 2, 5)), 
+             aes(y = max_intensity + 0.1, x = peak_rainfall_dt, color = storm, label = storm_label)) +
+  theme(legend.position = "none")
+
+print(sum(new_years_storm_pred$rain_interval_in))
+print(new_years_storm_class_summary)
+print(new_years_storm_pred %>% filter(result_datetime == ymd_hms("2023-01-05 15:30:00")))
+print(new_years_storm_pred %>% filter(result_datetime == ymd_hms("2023-01-06 14:30:00")))
 ```
 
 # Flow Frequency
@@ -903,18 +959,75 @@ ggplot() +
 ```
 
 ```{r}
+ggplot() + 
+  geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain")) + 
+  tidyquant::geom_ma(data = bank_elev, aes(x = station_2d, y = bank_elev_min, color = "Terrain"), 
+                     ma_fun = EMA, n = 100, linetype = "dotted") +
+  geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "31 Dec 2022"), shape = 9, size = 4) + 
+  geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "31 Dec 2022")) +
+  geom_line(data = ras_2d_wse_q100, aes(x = station_ft, y = wse_max_feet, color = "Q100 AC")) +
+#  geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), #linetype = "dashed") + 
+#  geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), #linetype = "dashed") +
+  scale_color_manual(values = c("Terrain" = "black", 
+                                "31 Dec 2022" = "blue",
+                                "Q100 AC" = "orange")) + 
+  theme(legend.position = "none") +ggtitle("2D model result") + theme(legend.position = "right", legend.title=element_blank()) + 
+  geom_text(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation - 1, color = "Terrain", label = cross_section )) 
+```
+
+```{r}
+ggplot() + 
+  geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain")) + 
+  tidyquant::geom_ma(data = bank_elev, aes(x = station_2d, y = bank_elev_min, color = "Terrain"), 
+                     ma_fun = EMA, n = 100, linetype = "dotted") +
+  #geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "31 Dec 2022"), shape = 9, size = 4) + 
+  geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "31 Dec 2022")) +
+  #geom_line(data = ras_2d_wse_q100, aes(x = station_ft, y = wse_max_feet, color = "Q100 AC")) +
+  geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), linetype = "dashed") + 
+  geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), linetype = "dashed") +
+  scale_color_manual(values = c("Terrain" = "black", 
+                                "31 Dec 2022" = "blue",
+                                "Q100 AC" = "orange")) + 
+  theme(legend.position = "none") +ggtitle("2D model result") + theme(legend.position = "right", legend.title=element_blank()) + 
+    geom_text(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation - 1, color = "Terrain", label = cross_section )) 
+
+```
+
+```{r}
 
 ras_1d %>% 
   left_join(hwm_geometries) %>% 
   filter(profile != "5 Jan 1982") %>%
   arrange(water_surface_elevation) %>%
-  ggplot(aes(x = river_sta, color = forcats::fct_reorder(profile, -w_s_elev_ft))) + 
-    geom_point(aes(y = water_surface_elevation), shape = 9, size = 4) + 
-    geom_line(aes(y = w_s_elev_ft, color = profile)) + 
+  mutate(profile_fct = forcats::fct_reorder(profile, -w_s_elev_ft)) %>%
+  ggplot(aes(x = river_sta, color = profile_fct)) + 
+    geom_line(aes(y = w_s_elev_ft, color = profile_fct) ) + 
     geom_line(aes(y = min_ch_el_ft), color = "black") +
-    scale_x_reverse() + theme(legend.title=element_blank())
-                                                                                  
-
+    scale_x_reverse() + theme(legend.title=element_blank()) + 
+    geom_point(aes(y = water_surface_elevation), shape = 9, size = 4) + 
+    geom_text(data = left_join(hwm_dec_2022, capacity), aes(x = station_1d, y = capacity_wse, label = "—"), color = "black", size = 4) +
+  scale_color_manual(values = c("Q100 AC" = "lightblue",
+                                "Q100 BKF" = "lightblue",
+                                "Q25 BKF" = "lightblue",
+                                "Q5 Channel" = "lightblue",
+                                "Q2 BKF" = "lightblue",
+                                "14 Jan 2023" = "darkorange",
+                                "31 Dec 2022" = "darkmagenta",
+                                "13 Feb 2019" = "darkgreen",
+                                "11 Nov 2022" = "darkred"
+                                 )) #+ 
+    #scale_linetype_manual(values = c("Q100 AC" = "dashed",
+    #                            "Q100 BKF" = "solid",
+    #                            "Q25 BKF" = "solid",
+    #                            "Q5 Channel" = "dashed",
+    #                            "Q2 BKF" = "solid",
+    #                            "14 Jan 2023" = "dashed",
+    #                            "31 Dec 2022" = "solid",
+    #                            "13 Feb 2019" = "dashed",
+    #                            "11 Nov 2022" = "solid"
+    #                             )) + 
+  #labs(color = "profile", linetype = "profile")
+```
 ```
 
 

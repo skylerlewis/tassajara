@@ -117,7 +117,7 @@ maxRange <- 5000
 coeff <- 0.0005
 
 new_years_storm_pred %>% 
-  filter(result_datetime < ymd("2023-01-23")) %>%
+  filter(result_datetime < ymd("2023-01-23")) %>% #23")) %>%
   ggplot(aes(x = result_datetime)) +
   geom_area(aes(y = streamflow_cfs_pred, 
                 fill = "q_pred")) + 
@@ -125,7 +125,7 @@ new_years_storm_pred %>%
                 fill = "q")) +
   geom_tile(aes(y = maxRange - rain_intensity_in/coeff/2, 
                 height = rain_intensity_in/coeff, 
-                fill = "precip")) +
+                color = "precip", fill = "precip")) +
   scale_y_continuous(name = "streamflow (cfs)",
                      limit = c(0, maxRange),
                      expand = c(0, 0),
@@ -133,11 +133,15 @@ new_years_storm_pred %>%
                                          name = "precipitation (in/hr)")) +
   theme(legend.position = 'top') + 
   ggtitle("Dec 2022 - Jan 2023 rainfall and streamflow") +
-  geom_hline(yintercept = 650 , linetype = "dashed") + annotate("text", x=as.POSIXct(ymd("2023-01-21")), y=650 , label="Q2 = 650 cfs") +
-  geom_hline(yintercept = 1200, linetype = "dashed") + annotate("text", x=as.POSIXct(ymd("2023-01-21")), y=1200, label="Q5 = 1200 cfs") +
+  geom_hline(yintercept = 650 , linetype = "dashed") + annotate("text", x=as.POSIXct(ymd("2023-01-21")), y=100+650 , label="Q2 = 650 cfs") +
+  geom_hline(yintercept = 1200, linetype = "dashed") + annotate("text", x=as.POSIXct(ymd("2023-01-21")), y=100+1200, label="Q5 = 1200 cfs") +
   scale_fill_manual(values = c("precip" = "blue", "q" = "black", "q_pred" = "red"),
                     labels = c("precip" = "Precipitation", "q" = "Streamflow (gauged)", "q_pred" = "Streamflow (predicted)"),
-                    name = NULL) 
+                    name = NULL) +
+  scale_color_manual(values = c("precip" = "blue", "q" = "black", "q_pred" = "red"),
+                    labels = c("precip" = "Precipitation", "q" = "Streamflow (gauged)", "q_pred" = "Streamflow (predicted)"),
+                    name = NULL) +
+  scale_x_datetime(date_breaks = "days" , date_labels = "%d")  #\n%b") + 
 ```
 
     ## Warning: Removed 69 rows containing non-finite values (`stat_align()`).
@@ -215,6 +219,103 @@ ggplot() +
 ```
 
 ![](tassajara_hydro_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+Examine specific storms
+
+``` r
+max_range_left <- 1
+max_range_right <- 20
+coeff <- max_range_right/max_range_left
+
+new_years_storm_class <- new_years_storm_pred %>%
+  filter(result_datetime < ymd("2023-01-23")) %>%
+  mutate(storm = as.factor(case_when(
+                           result_datetime < ymd_hms("2023-01-02 00:00:00") ~ "1",
+                           result_datetime < ymd_hms("2023-01-07 00:00:00") ~ "2",
+                           result_datetime < ymd_hms("2023-01-09 18:00:00") ~ NA,
+                           result_datetime < ymd_hms("2023-01-13 00:00:00") ~ NA,
+                           result_datetime < ymd_hms("2023-01-17 00:00:00") ~ "5",
+                             TRUE ~ NA
+  )))
+
+new_years_storm_class_summary <- new_years_storm_class %>% group_by(storm) %>% summarize(max_intensity = max(rain_intensity_in),
+                                                        total_precip = sum(rain_interval_in),
+                                                        max_stage = max(stage_ft),
+                                                        max_streamflow = max(streamflow_cfs_pred),
+                                                        peak_rainfall_dt = result_datetime[which.max(rain_interval_in)],
+                                                        peak_runoff_dt = result_datetime[which.max(stage_ft)],
+                                                        #lag_time = as.duration(peak_runoff_dt - peak_rainfall_dt)
+                                                        ) %>%
+  mutate(storm_label = paste0(
+                              total_precip, " in total", "\n", 
+                              max_intensity, " in/hr max.", "\n",
+                              peak_rainfall_dt
+                              ))
+
+new_years_storm_class %>% ggplot(aes(x = result_datetime)) + 
+  geom_col(aes(y = rain_intensity_in, color = storm, fill = storm)) +
+  geom_line(aes(y = rain_wy_in/coeff)) +
+  scale_x_datetime(date_breaks = "days" , date_labels = "%d") + #\n%b") + 
+  scale_y_continuous(name = "precipitation intensity (in/hr)",
+                   limit = c(0, max_range_left),
+                   expand = c(0, 0),
+                   sec.axis = sec_axis(trans = ~.*coeff, 
+                                       name = "water year cumulative precip (in)")) + 
+  geom_point(data = new_years_storm_class_summary %>% filter(storm %in% c(1, 2, 5)), 
+             aes(y = max_intensity, x = peak_rainfall_dt, color = storm)) + 
+  geom_text(data = new_years_storm_class_summary %>% filter(storm %in% c(1, 2, 5)), 
+             aes(y = max_intensity + 0.1, x = peak_rainfall_dt, color = storm, label = storm_label)) +
+  theme(legend.position = "none")
+```
+
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+
+``` r
+print(sum(new_years_storm_pred$rain_interval_in))
+```
+
+    ## [1] 11.327
+
+``` r
+print(new_years_storm_class_summary)
+```
+
+    ## # A tibble: 4 × 8
+    ##   storm max_in…¹ total…² max_s…³ max_s…⁴ peak_rainfall_dt    peak_runoff_dt     
+    ##   <fct>    <dbl>   <dbl>   <dbl>   <dbl> <dttm>              <dttm>             
+    ## 1 1        0.72     4.34    7.04   3346. 2022-12-31 13:45:00 2022-12-31 15:45:00
+    ## 2 2        0.644    1.80    3.45    946. 2023-01-04 18:30:00 2023-01-05 15:00:00
+    ## 3 5        0.452    2.98    7.28   3524  2023-01-14 09:15:00 2023-01-16 06:00:00
+    ## 4 <NA>     0.34     2.22    4.16   1491. 2023-01-10 02:45:00 2023-01-09 10:30:00
+    ## # … with 1 more variable: storm_label <chr>, and abbreviated variable names
+    ## #   ¹​max_intensity, ²​total_precip, ³​max_stage, ⁴​max_streamflow
+
+``` r
+print(new_years_storm_pred %>% filter(result_datetime == ymd_hms("2023-01-05 15:30:00")))
+```
+
+    ## # A tibble: 1 × 15
+    ##   result_date result_t…¹ gh_bu…² gh_pr…³ water…⁴ rain_…⁵ rain_…⁶ rain_…⁷ battery
+    ##   <chr>       <time>       <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>
+    ## 1 01/05/2023  15:30         3.33    3.23      11       0   0.755    12.9    13.0
+    ## # … with 6 more variables: streamflow_cfs <dbl>, result_datetime <dttm>,
+    ## #   stage_ft <dbl>, rain_intensity_in <dbl>, streamflow_cfs_pred <dbl>,
+    ## #   is_predicted <lgl>, and abbreviated variable names ¹​result_time,
+    ## #   ²​gh_bubbler_ft, ³​gh_probe_ft, ⁴​water_temp_c, ⁵​rain_interval_in,
+    ## #   ⁶​rain_day_pst_in, ⁷​rain_wy_in
+
+``` r
+print(new_years_storm_pred %>% filter(result_datetime == ymd_hms("2023-01-06 14:30:00")))
+```
+
+    ## # A tibble: 1 × 15
+    ##   result_date result_t…¹ gh_bu…² gh_pr…³ water…⁴ rain_…⁵ rain_…⁶ rain_…⁷ battery
+    ##   <chr>       <time>       <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>
+    ## 1 01/06/2023  14:30         1.23    1.11    10.6       0       0    12.9    13.3
+    ## # … with 6 more variables: streamflow_cfs <dbl>, result_datetime <dttm>,
+    ## #   stage_ft <dbl>, rain_intensity_in <dbl>, streamflow_cfs_pred <dbl>,
+    ## #   is_predicted <lgl>, and abbreviated variable names ¹​result_time,
+    ## #   ²​gh_bubbler_ft, ³​gh_probe_ft, ⁴​water_temp_c, ⁵​rain_interval_in,
+    ## #   ⁶​rain_day_pst_in, ⁷​rain_wy_in
 
 # Flow Frequency
 
@@ -259,7 +360,7 @@ ggplot() +
   ggrepel::geom_text_repel(data = peak_flows_pred, aes(y = discharge_cfs, x = return_interval_y_pred, label = as.character(peak_flow_date)), color = "red") 
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
 
 ``` r
 #peak_flows %>% fasstr::compute_frequency_analysis()
@@ -387,7 +488,7 @@ xs_dfs %>%
     ggtitle("Cross section geometries")
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
 
 Example plot with a water surface intersected
 
@@ -397,7 +498,7 @@ plot_xs(xs_b, 359)
 
     ## Warning: Removed 1421 rows containing missing values (`geom_line()`).
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
 
 Calculate hydraulic geometries under HWMs (hydraulic radius, etc)
 
@@ -793,7 +894,7 @@ mannings_n %>%
   geom_hline(yintercept = 0.12, color = "red", linetype = "dashed") 
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
 
 ``` r
 # add chan and heard estimates
@@ -848,7 +949,7 @@ ggplot() +
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
 
 ``` r
 print(bankfull_q)
@@ -911,7 +1012,7 @@ hwm_hydraulics %>%
   ggtitle("Sediment transport estimates based on high water marks")
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-26-1.png)<!-- -->
 
 ``` r
 breaks <- ras_1d_sed %>% group_by(profile, q_total_cfs) %>% summarize() %>% as.list()
@@ -934,7 +1035,7 @@ ras_1d_sed %>%
   theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-26-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-27-1.png)<!-- -->
 
 ``` r
 ras_1d_sed %>% 
@@ -955,7 +1056,7 @@ ras_1d_sed %>%
   theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-26-2.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-27-2.png)<!-- -->
 
 ``` r
 ras_1d_sed %>% 
@@ -977,7 +1078,7 @@ ras_1d_sed %>%
   theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0)) 
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-26-3.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-27-3.png)<!-- -->
 
 ``` r
 ras_1d_sed %>% 
@@ -1000,7 +1101,7 @@ ras_1d_sed %>%
   scale_y_continuous(breaks = c(0, 1.5, 3, 4, 6, 10)) 
 ```
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-27-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-28-1.png)<!-- -->
 
 # View RAS 2D results
 
@@ -1169,7 +1270,7 @@ ggplot() +
 
     ## Warning: Removed 2 rows containing missing values (`geom_point()`).
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-31-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-32-1.png)<!-- -->
 
 ``` r
 ggplot() + 
@@ -1192,47 +1293,121 @@ ggplot() +
     ## Removed 23 rows containing missing values (`geom_line()`).
     ## Removed 23 rows containing missing values (`geom_line()`).
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-32-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-33-1.png)<!-- -->
+
+``` r
+ggplot() + 
+  geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain")) + 
+  tidyquant::geom_ma(data = bank_elev, aes(x = station_2d, y = bank_elev_min, color = "Terrain"), 
+                     ma_fun = EMA, n = 100, linetype = "dotted") +
+  geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "31 Dec 2022"), shape = 9, size = 4) + 
+  geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "31 Dec 2022")) +
+  geom_line(data = ras_2d_wse_q100, aes(x = station_ft, y = wse_max_feet, color = "Q100 AC")) +
+#  geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), #linetype = "dashed") + 
+#  geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), #linetype = "dashed") +
+  scale_color_manual(values = c("Terrain" = "black", 
+                                "31 Dec 2022" = "blue",
+                                "Q100 AC" = "orange")) + 
+  theme(legend.position = "none") +ggtitle("2D model result") + theme(legend.position = "right", legend.title=element_blank()) + 
+  geom_text(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation - 1, color = "Terrain", label = cross_section )) 
+```
+
+    ## Warning: Removed 23 rows containing missing values (`geom_line()`).
+    ## Removed 23 rows containing missing values (`geom_line()`).
+
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
+
+``` r
+ggplot() + 
+  geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain")) + 
+  tidyquant::geom_ma(data = bank_elev, aes(x = station_2d, y = bank_elev_min, color = "Terrain"), 
+                     ma_fun = EMA, n = 100, linetype = "dotted") +
+  #geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "31 Dec 2022"), shape = 9, size = 4) + 
+  geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "31 Dec 2022")) +
+  #geom_line(data = ras_2d_wse_q100, aes(x = station_ft, y = wse_max_feet, color = "Q100 AC")) +
+  geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), linetype = "dashed") + 
+  geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), linetype = "dashed") +
+  scale_color_manual(values = c("Terrain" = "black", 
+                                "31 Dec 2022" = "blue",
+                                "Q100 AC" = "orange")) + 
+  theme(legend.position = "none") +ggtitle("2D model result") + theme(legend.position = "right", legend.title=element_blank()) + 
+    geom_text(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation - 1, color = "Terrain", label = cross_section )) 
+```
+
+    ## Warning: Removed 23 rows containing missing values (`geom_line()`).
+    ## Removed 23 rows containing missing values (`geom_line()`).
+
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
 
 ``` r
 ras_1d %>% 
   left_join(hwm_geometries) %>% 
   filter(profile != "5 Jan 1982") %>%
   arrange(water_surface_elevation) %>%
-  ggplot(aes(x = river_sta, color = forcats::fct_reorder(profile, -w_s_elev_ft))) + 
-    geom_point(aes(y = water_surface_elevation), shape = 9, size = 4) + 
-    geom_line(aes(y = w_s_elev_ft, color = profile)) + 
+  mutate(profile_fct = forcats::fct_reorder(profile, -w_s_elev_ft)) %>%
+  ggplot(aes(x = river_sta, color = profile_fct)) + 
+    geom_line(aes(y = w_s_elev_ft, color = profile_fct) ) + 
     geom_line(aes(y = min_ch_el_ft), color = "black") +
-    scale_x_reverse() + theme(legend.title=element_blank())
+    scale_x_reverse() + theme(legend.title=element_blank()) + 
+    geom_point(aes(y = water_surface_elevation), shape = 9, size = 4) + 
+    geom_text(data = left_join(hwm_dec_2022, capacity), aes(x = station_1d, y = capacity_wse, label = "—"), color = "black", size = 4) +
+  scale_color_manual(values = c("Q100 AC" = "lightblue",
+                                "Q100 BKF" = "lightblue",
+                                "Q25 BKF" = "lightblue",
+                                "Q5 Channel" = "lightblue",
+                                "Q2 BKF" = "lightblue",
+                                "14 Jan 2023" = "darkorange",
+                                "31 Dec 2022" = "darkmagenta",
+                                "13 Feb 2019" = "darkgreen",
+                                "11 Nov 2022" = "darkred"
+                                 )) #+ 
 ```
 
     ## Joining with `by = join_by(cross_section, peak_flow_date)`
+    ## Joining with `by = join_by(cross_section)`
 
     ## Warning: Removed 56 rows containing missing values (`geom_point()`).
 
-![](tassajara_hydro_files/figure-gfm/unnamed-chunk-33-1.png)<!-- -->
+![](tassajara_hydro_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
 
 ``` r
-# summarize at-a-station hydraulics for 2D results
-
-ras_2d_cleaned <- ras_2d_wse %>% 
-  # join to the cross section table
-  mutate(station_2d = as.integer(station_ft)) %>%
-  group_by(station_2d) %>% 
-  summarize(wse_2d = mean(wse_max_feet)) %>% 
-  mutate(slope = abs((lag(wse_2d, n = 1) - wse_2d) / 
-                    (lag(station_2d, n = 1) - station_2d))) 
-
-ras_2d_hydraulics <- ras_2d_cleaned %>%
-  inner_join(cross_sections) %>%
-  left_join(xs_dfs, by = join_by(cross_section == xs_id)) %>%
-  # calculate hydraulic geometries
-  mutate(result = map2(xs_df, wse_2d, calc_xs)) %>% 
-  unnest_wider(result) %>% 
-  # compare against surveyed HWMs
-  left_join(hwm_dec_2022 %>% select(cross_section, hwm_elevation)) %>%
-  mutate(hwm_difference = wse_2d - hwm_elevation)
+    #scale_linetype_manual(values = c("Q100 AC" = "dashed",
+    #                            "Q100 BKF" = "solid",
+    #                            "Q25 BKF" = "solid",
+    #                            "Q5 Channel" = "dashed",
+    #                            "Q2 BKF" = "solid",
+    #                            "14 Jan 2023" = "dashed",
+    #                            "31 Dec 2022" = "solid",
+    #                            "13 Feb 2019" = "dashed",
+    #                            "11 Nov 2022" = "solid"
+    #                             )) + 
+  #labs(color = "profile", linetype = "profile")
 ```
+
+
+
+
+
+    ```r
+    # summarize at-a-station hydraulics for 2D results
+
+    ras_2d_cleaned <- ras_2d_wse %>% 
+      # join to the cross section table
+      mutate(station_2d = as.integer(station_ft)) %>%
+      group_by(station_2d) %>% 
+      summarize(wse_2d = mean(wse_max_feet)) %>% 
+      mutate(slope = abs((lag(wse_2d, n = 1) - wse_2d) / 
+                        (lag(station_2d, n = 1) - station_2d))) 
+
+    ras_2d_hydraulics <- ras_2d_cleaned %>%
+      inner_join(cross_sections) %>%
+      left_join(xs_dfs, by = join_by(cross_section == xs_id)) %>%
+      # calculate hydraulic geometries
+      mutate(result = map2(xs_df, wse_2d, calc_xs)) %>% 
+      unnest_wider(result) %>% 
+      # compare against surveyed HWMs
+      left_join(hwm_dec_2022 %>% select(cross_section, hwm_elevation)) %>%
+      mutate(hwm_difference = wse_2d - hwm_elevation)
 
     ## Joining with `by = join_by(station_2d)`
     ## Joining with `by = join_by(cross_section)`
