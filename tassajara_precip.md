@@ -26,7 +26,14 @@ library(lubridate)
     ##     date, intersect, setdiff, union
 
 ``` r
-ggplot2::theme_set(theme_classic())
+sysfonts::font_add(family = "franklin-gothic", 
+                   regular = "./fonts/FRABK.TTF", 
+                   italic = "./fonts/FRABKIT.TTF", 
+                   bold = "./fonts/FRADM.TTF",
+                   bolditalic = "./fonts/FRADMIT.TTF")
+showtext::showtext_auto()
+ggplot2::theme_set(theme_classic() + theme(text = element_text(family = 'franklin-gothic')))
+knitr::opts_chunk$set(fig.width=9, fig.height=6) 
 ```
 
 # CDEC Precipitation
@@ -45,6 +52,8 @@ rawdata_mlr %>% saveRDS(file = "data/rawdata_mlr.rds")
 ``` r
 rawdata_tas <- readRDS(file = "data/rawdata_tas.rds")
 rawdata_mlr <- readRDS(file = "data/rawdata_mlr.rds")
+
+# convert tipping bucket data to daily data
 
 inst_data_tas <- rawdata_tas %>%
   as_tibble() %>%
@@ -178,7 +187,7 @@ daily_data_pred %>%
 ggsave("barchart.svg")
 ```
 
-    ## Saving 7 x 5 in image
+    ## Saving 9 x 6 in image
 
     ## Warning: Removed 12 rows containing non-finite values (`stat_align()`).
 
@@ -199,7 +208,7 @@ daily_data_pred %>%
     scale_x_discrete(name = "Day of Water Year Max 24h Precipitation") +
     scale_y_continuous(name = "Maximum 24h precipitation (inches)", expand = c(0, 0), limits = c(0, 10)) +
     ggtitle("Maximum 24h precipitation (inches) at Tassajara") + 
-    scale_fill_viridis_c(direction = -1) + 
+    scale_fill_viridis_c(direction = -1, option = "cividis") + 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
   theme(legend.position = "none")
 ```
@@ -218,7 +227,7 @@ daily_data_pred %>%
     scale_x_discrete(name = "Water Year") +
     scale_y_continuous(name = "Total annual precipitation (inches)", expand = c(0, 0), limits = c(0, 40)) +
     ggtitle("Total annual precipitation (inches) at Tassajara") + 
-    scale_fill_viridis_c(direction = -1) + 
+    scale_fill_viridis_c(direction = -1, option = "cividis") + 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
   theme(legend.position = "none")
 ```
@@ -275,6 +284,15 @@ summary(model)
 alpha <- exp(model$coefficients["(Intercept)"])
 beta <- model$coefficients["log(hourly_filtered$precip_mlr_24h)"]
 
+hourly_filtered %>% ggplot(aes(y = precip_tas_24h, x = precip_mlr_24h)) + geom_point() + 
+  scale_x_log10() + scale_y_log10() + geom_smooth(method=lm)
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+
+``` r
 rolling24h_pred <- hourly %>% 
 #  mutate(precip_tas_24h_pred = alpha * precip_mlr_24h^beta)
    mutate(precip_tas_24h_pred = replace_na(case_when(date_hour < min(hourly_tas$date_hour) ~ alpha * precip_mlr_24h^beta, TRUE ~ precip_tas_24h),0))
@@ -290,12 +308,93 @@ rolling24h_pred %>%
     scale_x_discrete(name = "Day of Water Year Max 24h Precipitation") +
     scale_y_continuous(name = "Maximum 24h precipitation (inches)", expand = c(0, 0), limits = c(0, 20)) +
     ggtitle("Maximum 24h precipitation (inches) at Tassajara") + 
-    scale_fill_viridis_c(direction = -1) + 
+    scale_fill_viridis_c(direction = -1, option = "cividis") + 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
   theme(legend.position = "none")
 ```
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-7-2.png)<!-- -->
+
+``` r
+# IMPROVED VERSION USING ROLLING 24H WINDOW RATHER THAN CALENDAR 24H DAY -- IN PROGRESS
+hourly_tas <- inst_data_tas %>%
+  group_by(date_hour) %>%
+  summarize(precip_tas = sum(increment)) %>%
+  complete(date_hour) %>%
+  mutate(precip_tas_24h = zoo::rollapplyr(precip_tas, 24, sum, partial=T)) 
+
+hourly_mlr <- inst_data_mlr %>%
+  group_by(date_hour) %>%
+  summarize(precip_mlr = sum(increment)) %>%
+  complete(date_hour) %>%
+  mutate(precip_mlr_24h = zoo::rollapplyr(precip_mlr, 24, sum, partial=T)) 
+
+hourly <- hourly_mlr %>% left_join(hourly_tas) 
+```
+
+    ## Joining with `by = join_by(date_hour)`
+
+``` r
+hourly_filtered <- hourly %>% 
+  select(precip_tas_24h, precip_mlr_24h) %>%
+  filter(precip_tas_24h > 0, precip_mlr_24h > 0)
+model <- lm(log(hourly_filtered$precip_tas_24h) ~ log(hourly_filtered$precip_mlr_24h))
+summary(model)
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = log(hourly_filtered$precip_tas_24h) ~ log(hourly_filtered$precip_mlr_24h))
+    ## 
+    ## Residuals:
+    ##     Min      1Q  Median      3Q     Max 
+    ## -4.1814 -0.3290  0.0321  0.3300  6.3786 
+    ## 
+    ## Coefficients:
+    ##                                      Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)                         -0.326381   0.010340  -31.57   <2e-16 ***
+    ## log(hourly_filtered$precip_mlr_24h)  0.924775   0.004837  191.19   <2e-16 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 0.7166 on 11559 degrees of freedom
+    ## Multiple R-squared:  0.7598, Adjusted R-squared:  0.7597 
+    ## F-statistic: 3.655e+04 on 1 and 11559 DF,  p-value: < 2.2e-16
+
+``` r
+alpha <- exp(model$coefficients["(Intercept)"])
+beta <- model$coefficients["log(hourly_filtered$precip_mlr_24h)"]
+
+hourly_filtered %>% ggplot(aes(y = precip_tas_24h, x = precip_mlr_24h)) + geom_point() + 
+  scale_x_log10() + scale_y_log10() + geom_smooth(method=lm)
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+
+``` r
+rolling24h_pred <- hourly %>% 
+#  mutate(precip_tas_24h_pred = alpha * precip_mlr_24h^beta)
+   mutate(precip_tas_24h_pred = replace_na(case_when(date_hour < min(hourly_tas$date_hour) ~ alpha * precip_mlr_24h^beta, TRUE ~ precip_tas_24h),0))
+
+rolling24h_pred %>%
+  mutate(water_year = case_when(month(date_hour) >= 10 ~ year(date_hour) + 1, TRUE ~ year(date_hour))) %>% 
+  group_by(water_year) %>%
+  slice(which.max(precip_tas_24h_pred)) %>%
+  rename(precip_tas_24h_max = precip_tas_24h_pred, date_24h_max = date_hour) %>%
+  ggplot(aes(y = precip_tas_24h_max, x = as.factor(date_24h_max), fill = precip_tas_24h_max)) + 
+    geom_col(width = 1) +
+    geom_text(aes(label = round(precip_tas_24h_max, 1)), vjust=-0.5) +
+    scale_x_discrete(name = "Day of Water Year Max 24h Precipitation") +
+    scale_y_continuous(name = "Maximum 24h precipitation (inches)", expand = c(0, 0), limits = c(0, 20)) +
+    ggtitle("Maximum 24h precipitation (inches) at Tassajara") + 
+    scale_fill_viridis_c(direction = -1, option = "cividis") + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  theme(legend.position = "none")
+```
+
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-8-2.png)<!-- -->
 
 # PRISM Precipitation
 
@@ -320,15 +419,42 @@ prism_monthly <- read_csv("data/PRISM_ppt_tmin_tmean_tmax_tdmean_vpdmin_vpdmax_p
 
 ``` r
 prism_monthly %>% 
-  filter(water_year>1997) %>%
-  ggplot(aes(y = ppt_inches, x = date %m+% months(3), fill = ppt_inches)) + 
-    geom_col() +
+  filter(water_year>=1997) %>%
+  ggplot(aes(y = ppt_inches, x = as.POSIXct(date %m+% months(3)), fill = ppt_inches, color = ppt_inches)) + 
+    geom_col() + #fill = "black") +
     scale_y_continuous(name = "Monthly total precipitation (inches)", expand = c(0, 0), limits = c(0, 15)) +
-    ggtitle("PRISM historical precipitation for Lower Tassajara Creek") + scale_fill_viridis_c(direction = -1)  + 
-  theme(legend.position = "none")
+  scale_x_datetime(date_breaks = "1 year", date_labels = "%Y", name="", expand = c(0,0), 
+                   limits=c(as.POSIXct(ymd("1997-01-01")), as.POSIXct(ymd("2023-12-31")))) +
+    #ggtitle("PRISM historical precipitation for Lower Tassajara Creek") + 
+  scale_fill_viridis_c(direction = -1 , option = "cividis") + 
+  scale_color_viridis_c(direction = -1, option = "cividis") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position = "none") + 
+  geom_text(aes(y = ppt_inches + 1, label = case_when(ppt_inches > 9 ~ paste0(format(date, "%b-%Y"), "\n", ppt_inches), TRUE ~ NA)), size = 2)
 ```
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+    ## Warning: Removed 1 rows containing missing values (`geom_col()`).
+
+    ## Warning: Removed 313 rows containing missing values (`geom_text()`).
+
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+
+``` r
+prism_monthly %>% 
+  filter(water_year>=2017) %>%
+  ggplot(aes(y = ppt_inches, x = as.POSIXct(date %m+% months(3)))) + #fill = ppt_inches, color = ppt_inches)) + 
+    geom_col(fill = "black") +
+    scale_y_continuous(name = "Monthly total precipitation (inches)", expand = c(0, 0), limits = c(0, 15)) +
+  scale_x_datetime(date_breaks = "1 year", date_labels = "%Y", name="", expand = c(0,0), 
+                   limits=c(as.POSIXct(ymd("2017-01-01")), as.POSIXct(ymd("2023-12-31")))) +
+    #ggtitle("PRISM historical precipitation for Lower Tassajara Creek") + 
+  #scale_fill_viridis_c(direction = -1, option = "cividis") + 
+  #scale_color_viridis_c(direction = -1, option = "cividis") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position = "none")
+```
+
+    ## Warning: Removed 1 rows containing missing values (`geom_col()`).
+
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
 
 ``` r
 prism_yearly <- prism_monthly %>% 
@@ -357,16 +483,16 @@ prism_yearly %>%
     geom_col(width = 1) +
     geom_text(aes(label = case_when(water_year %in% prism_yearly_top$water_year ~ paste(water_year, ppt_inches, sep = "\n"), TRUE ~ NA)), vjust=-0.25) +
     #scale_fill_brewer()
-    scale_fill_viridis_d(direction = -1) +
+    scale_fill_viridis_d(direction = -1, option = "viridis", name = "Quartile of anual precip.") +
     scale_x_continuous(name ="Water Year", breaks = seq(1890, 2020, by = 10), expand = c(0,0)) +
     scale_y_continuous(name = "Annual total precipitation (inches)", expand = c(0, 0), limits = c(0, 50)) +
-    ggtitle("PRISM historical precipitation for Lower Tassajara Creek")  + 
-  theme(legend.position = "none")
+    #ggtitle("PRISM historical precipitation for Lower Tassajara Creek")  + 
+  theme(legend.position = "top")
 ```
 
     ## Warning: Removed 125 rows containing missing values (`geom_text()`).
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
 ``` r
 coeff <- 30
@@ -384,17 +510,18 @@ prism_monthly  %>%
             mean_temp_max = mean(tmax_degrees_f)) %>%
   ggplot(aes(x = time_month)) + 
   geom_col(aes(y = mean_precip, group = 1, fill = mean_precip), width=1) + 
-  #geom_text(aes(y = mean_precip, label = round(mean_precip,2), group = 1)) + 
+  geom_text(aes(y = mean_precip+0.15, label = round(mean_precip,2), group = 1)) + 
   geom_point(aes(y = mean_temp/coeff, group = 1)) + 
   geom_line(aes(y = mean_temp/coeff, group = 1)) + 
   #geom_ribbon(aes(ymin = mean_temp_min/coeff, ymax = mean_temp_max/coeff, group = 1)) +
-  scale_y_continuous(name = "precip", sec.axis = sec_axis(trans = ~.*coeff, name = "temp"), expand = c(0,0)) + 
-  ggtitle("PRISM monthly average precipitation and temperature") +
-  scale_fill_viridis_c(direction = -1) + geom_vline(xintercept=9.5, linetype="dashed") + 
+  scale_y_continuous(name = "Mean monthly precipitation (in)", limits = c(0, 4), sec.axis = sec_axis(trans = ~.*coeff, name = "Mean monthly temperature (°F)"), expand = c(0,0)) + 
+  scale_x_discrete(name = "") +
+  #ggtitle("PRISM monthly average precipitation and temperature") +
+  scale_fill_viridis_c(direction = -1, option = "viridis") + geom_vline(xintercept=9.5, linetype="dashed") + 
   theme(legend.position = "none")
 ```
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 # Landsat NDVI
 
@@ -430,7 +557,7 @@ scale_y_continuous(name = "NDVI",)
 
     ## Warning: Removed 13689 rows containing missing values (`geom_line()`).
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
 
 ``` r
 ggplot() + 
@@ -451,7 +578,7 @@ scale_y_continuous(name = "NDVI",) + ggtitle("Landsat NDVI Time Series 1989-2023
 
     ## Warning: Removed 13689 rows containing missing values (`geom_line()`).
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
 
 ``` r
 ndvi_time_series_interp %>% 
@@ -472,7 +599,7 @@ ndvi_time_series_interp %>%
     ## `summarise()` has grouped output by 'time_month'. You can override using the
     ## `.groups` argument.
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
 
 ``` r
 ndvi_time_series_interp %>% 
@@ -497,7 +624,7 @@ ndvi_time_series_interp %>%
   geom_vline(xintercept = 0) + scale_y_discrete(limits = rev) + ggtitle("Landsat change in NDVI per year by month, 1989-1999 vs 2000-2023")
 ```
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
 
 ``` r
 #https://www.statology.org/extract-coefficients-from-lm-in-r/
@@ -538,7 +665,7 @@ ndvi_time_series_interp %>%
 
     ## Warning: Removed 1 rows containing missing values (`position_stack()`).
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
 
 ``` r
 maxRange <- 10
@@ -559,7 +686,7 @@ scale_y_continuous(name = "precipitation",
 
     ## Warning: Removed 13689 rows containing missing values (`geom_line()`).
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
 
 ``` r
 #ndvi_time_series %>% 
@@ -605,7 +732,7 @@ ndvi_time_series %>%
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
 
 # crosstab of NDVI and relative elevation
 
@@ -636,7 +763,7 @@ rem <- terra::rast("data/raster/lidar2021_REM.tif") %>%
 terra::plot(rem)
 ```
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
 
 ``` r
 # categorical crosstab
@@ -709,7 +836,7 @@ naip_scale %>% terra::boxplot(rem_zones)
 
     ## Warning: [boxplot] taking a regular sample of 1e+05 cells
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-21-2.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-23-2.png)<!-- -->
 
 ``` r
 naip_offset %>% terra::boxplot(rem_zones)
@@ -717,4 +844,4 @@ naip_offset %>% terra::boxplot(rem_zones)
 
     ## Warning: [boxplot] taking a regular sample of 1e+05 cells
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-21-3.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-23-3.png)<!-- -->

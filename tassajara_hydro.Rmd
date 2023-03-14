@@ -2,7 +2,7 @@
 title: "Tassajara Creek H&H Calculations"
 output:
   github_document: default
-  html_notebook: default
+  #html_notebook: default
 keep_md: true
 ---
 
@@ -17,6 +17,7 @@ sysfonts::font_add(family = "franklin-gothic",
                    bolditalic = "./fonts/FRADMIT.TTF")
 showtext::showtext_auto()
 ggplot2::theme_set(theme_classic() + theme(text = element_text(family = 'franklin-gothic')))
+knitr::opts_chunk$set(fig.width=9, fig.height=6) 
 
 ``` 
 
@@ -71,8 +72,8 @@ new_years_storm_pred <- new_years_storm %>%
   #mutate(streamflow_cfs_pred = rating_curve["alpha"] * stage_ft^rating_curve["beta"])
   mutate(streamflow_cfs_pred = rating_curve(stage_ft))
 
-# version 2 of the rating curve using stepwise interpolation based on the I-580 HWM
-peak_flow_jan_2023 <- 3524
+# version 3 of the rating curve using stepwise interpolation based on the I-580 HWM
+peak_flow_jan_2023 <- 3524.8
 
 rating_curve <- new_years_storm %>% 
   select(c(streamflow_cfs, stage_ft)) %>% 
@@ -119,14 +120,14 @@ new_years_storm_pred %>%
                      expand = c(0, 0),
                      sec.axis = sec_axis(trans = ~(.-maxRange)*coeff, 
                                          name = "precipitation (in/hr)")) +
-  theme(legend.position = 'top') + 
+  theme(legend.position = 'none') + 
   ggtitle("Dec 2022 - Jan 2023 rainfall and streamflow") +
   geom_hline(yintercept = 650 , linetype = "dashed") + annotate("text", x=as.POSIXct(ymd("2023-01-21")), y=100+650 , label="Q2 = 650 cfs") +
   geom_hline(yintercept = 1200, linetype = "dashed") + annotate("text", x=as.POSIXct(ymd("2023-01-21")), y=100+1200, label="Q5 = 1200 cfs") +
-  scale_fill_manual(values = c("precip" = "blue", "q" = "black", "q_pred" = "red"),
+  scale_fill_manual(values = c("precip" = "#6388bd", "q" = "black", "q_pred" = "#777777"),
                     labels = c("precip" = "Precipitation", "q" = "Streamflow (gauged)", "q_pred" = "Streamflow (predicted)"),
                     name = NULL) +
-  scale_color_manual(values = c("precip" = "blue", "q" = "black", "q_pred" = "red"),
+  scale_color_manual(values = c("precip" = "#6388bd", "q" = "black", "q_pred" = "#777777"),
                     labels = c("precip" = "Precipitation", "q" = "Streamflow (gauged)", "q_pred" = "Streamflow (predicted)"),
                     name = NULL) +
   scale_x_datetime(date_breaks = "days" , date_labels = "%d")  #\n%b") + 
@@ -591,6 +592,11 @@ ras_1d <- read_csv("data/hec_ras_1d_out_v3.csv") %>%
   left_join(cross_sections, by = join_by(river_sta == station_1d)) %>%
   mutate(peak_flow_date = dmy(profile))
 
+# pull RAS 1D results for Dec 2022
+hwm_dec_2022 <- hwm_geometries %>% 
+  filter(peak_flow_date == "2022-12-31") %>% 
+  left_join(cross_sections)
+
 ras_1d_xs <- ras_1d %>% 
   drop_na(cross_section) #%>% 
   #left_join(capacity) %>%
@@ -862,136 +868,7 @@ ras_1d_sed %>%
 #   theme(strip.text.y.left = element_text(angle = 0))
 ```
 
-# View RAS 2D results
 
-```{r}
-
-# RAS 2D results
-ras_2d_gse <- read_csv("data/hec_ras_2d_profile_terrain.csv") %>%
-  janitor::clean_names()
-ras_2d_wse <- read_csv("data/hec_ras_2d_profile_wse_max.csv") %>%
-  janitor::clean_names()
-ras_2d_wse_q100 <- read_csv("data/hec_ras_2d_profile_wse_max_q100.csv") %>%
-  janitor::clean_names()
-
-ras_2d_gse_bda <- read_csv("data/hec_ras_2d_profile_terrain_bda.csv") %>%
-  janitor::clean_names()
-ras_2d_wse_bda <- read_csv("data/hec_ras_2d_profile_wse_max_bda.csv") %>%
-  janitor::clean_names()
-
-# RAS 1D results
-hwm_dec_2022 <- hwm_geometries %>% 
-  filter(peak_flow_date == "2022-12-31") %>% 
-  left_join(cross_sections)
-
-# Upper bank elevations calculated in ArcGIS
-bank_elev <- inner_join(
-    read_csv("data/bank_elev_lb.csv") %>%
-      janitor::clean_names() %>% 
-      rename(station_2d = objectid, bank_elev_left = elev) %>%
-      select(station_2d, bank_elev_left),
-    read_csv("data/bank_elev_rb.csv") %>%
-      janitor::clean_names() %>% 
-      rename(station_2d = objectid, bank_elev_right = elev) %>%
-      select(station_2d, bank_elev_right)
-  ) %>%
-  mutate(bank_elev_min = case_when(
-    bank_elev_left < bank_elev_right ~ bank_elev_left, 
-    TRUE ~bank_elev_right)) %>%
-  mutate(bank_elev_rolling_med = zoo::rollapply(bank_elev_min, 100, median, partial=T))
-
-# # Floodplain elevations (25ft from thalweg) calculated in ArcGIS
-# floodplain_elev <- inner_join(
-#     read_csv("data/bank_elev_lb_floodplain.csv") %>%
-#       janitor::clean_names() %>% 
-#       rename(station_2d = objectid, floodplain_elev_left = elev) %>%
-#       select(station_2d, floodplain_elev_left),
-#     read_csv("data/bank_elev_rb_floodplain.csv") %>%
-#       janitor::clean_names() %>% 
-#       rename(station_2d = objectid, floodplain_elev_right = elev) %>%
-#       select(station_2d, floodplain_elev_right)
-#   ) %>%
-#   mutate(floodplain_elev_min = case_when(
-#     floodplain_elev_left < floodplain_elev_right ~ floodplain_elev_left, 
-#     TRUE ~floodplain_elev_right)) %>%
-#   mutate(floodplain_elev_rolling_med = zoo::rollapply(floodplain_elev_min, 100, median, partial=T))
-
-
-ggplot() + 
-  geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile")) + 
-  geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)")) +
-  geom_line(data = ras_2d_wse_q100, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), linetype = "dotted") +
-  geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), linetype = "dashed") + 
-  geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), linetype = "dashed") +
-  geom_point(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation, color = "Terrain Profile")) +
-  geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "Surveyed HWM"), shape = 9, size = 4) + 
-  geom_point(data = filter(ras_1d, profile=="31 Dec 2022"), aes(x = station_2d, y = w_s_elev_ft, color = "Water Surface (RAS)")) +
-  #geom_smooth(data = bank_elev, aes(x = station_2d, y = bank_elev_rolling_med, color = "Appx. Ground Surface"), 
-  #            method = "gam", linetype = "dashed", size = 0.75) +
-  #geom_smooth(data = floodplain_elev, aes(x = station_2d, y = floodplain_elev_rolling_med, color = "Appx. Ground Surface"), 
-  #            method = "gam", linetype = "dashed", size = 0.75) +
-  tidyquant::geom_ma(data = bank_elev, aes(x = station_2d, y = bank_elev_min, color = "Appx. Ground Surface"), ma_fun = EMA, n = 100) +
-  #tidyquant::geom_ma(data = floodplain_elev, aes(x = station_2d, y = floodplain_elev_min, color = "Appx. Ground Surface"), 
-  #                   ma_fun = SMA, n = 100) +
-  scale_color_manual(values = c("Terrain Profile" = "black", 
-                                "Appx. Ground Surface" = "black", 
-                                "Water Surface (RAS)" = "blue",
-                                "Surveyed HWM" = "red")) + 
-  theme(legend.position = "none")
-
-```
-
-```{r}
-ggplot() + 
-  geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile")) + 
-  geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)")) +
-  geom_line(data = ras_2d_wse_q100, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), linetype = "dotted") +
-  geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), linetype = "dashed") + 
-  geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), linetype = "dashed") +
-  geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "Surveyed HWM"), shape = 9, size = 4) + 
-  geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "Surveyed HWM"), shape = 9, size = 4) + 
-  tidyquant::geom_ma(data = bank_elev, aes(x = station_2d, y = bank_elev_min, color = "Appx. Ground Surface"), ma_fun = EMA, n = 100) +
-  scale_color_manual(values = c("Terrain Profile" = "black", 
-                                "Appx. Ground Surface" = "black", 
-                                "Water Surface (RAS)" = "blue",
-                                "Surveyed HWM" = "red")) + 
-  theme(legend.position = "none") +ggtitle("2D model result")
-```
-
-```{r}
-ggplot() + 
-  geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain")) + 
-  tidyquant::geom_ma(data = bank_elev, aes(x = station_2d, y = bank_elev_min, color = "Terrain"), 
-                     ma_fun = EMA, n = 100, linetype = "dotted") +
-  geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "31 Dec 2022"), shape = 9, size = 4) + 
-  geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "31 Dec 2022")) +
-  geom_line(data = ras_2d_wse_q100, aes(x = station_ft, y = wse_max_feet, color = "Q100 AC")) +
-#  geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), #linetype = "dashed") + 
-#  geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), #linetype = "dashed") +
-  scale_color_manual(values = c("Terrain" = "black", 
-                                "31 Dec 2022" = "blue",
-                                "Q100 AC" = "orange")) + 
-  theme(legend.position = "none") +ggtitle("2D model result") + theme(legend.position = "right", legend.title=element_blank()) + 
-  geom_text(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation - 1, color = "Terrain", label = cross_section )) 
-```
-
-```{r}
-ggplot() + 
-  geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain")) + 
-  tidyquant::geom_ma(data = bank_elev, aes(x = station_2d, y = bank_elev_min, color = "Terrain"), 
-                     ma_fun = EMA, n = 100, linetype = "dotted") +
-  #geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "31 Dec 2022"), shape = 9, size = 4) + 
-  geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "31 Dec 2022")) +
-  #geom_line(data = ras_2d_wse_q100, aes(x = station_ft, y = wse_max_feet, color = "Q100 AC")) +
-  geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), linetype = "dashed") + 
-  geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), linetype = "dashed") +
-  scale_color_manual(values = c("Terrain" = "black", 
-                                "31 Dec 2022" = "blue",
-                                "Q100 AC" = "orange")) + 
-  theme(legend.position = "none") +ggtitle("2D model result") + theme(legend.position = "right", legend.title=element_blank()) + 
-    geom_text(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation - 1, color = "Terrain", label = cross_section )) 
-
-```
 
 ```{r}
 
@@ -1028,6 +905,169 @@ ras_1d %>%
     #                             )) + 
   #labs(color = "profile", linetype = "profile")
 ```
+
+```{r}
+# model validation
+ras_1d %>% 
+  left_join(hwm_geometries) %>% 
+  filter(profile != "5 Jan 1982") %>%
+  drop_na(water_surface_elevation) %>% 
+  select(cross_section, series, profile, water_surface_elevation, w_s_elev_ft) %>%
+  mutate(error = w_s_elev_ft - water_surface_elevation) %>%
+  select(cross_section, series, profile, error) %>%
+  arrange(cross_section) %>%
+  pivot_wider(names_from = cross_section, values_from = error) %>%
+  arrange(series, profile) #%>% write_csv("ignore/validation.csv")
+``` 
+
+
+# View RAS 2D results
+
+```{r}
+
+# RAS 2D results
+ras_2d_gse <- read_csv("data/hec_ras_2d_profile_terrain.csv") %>%
+  janitor::clean_names()
+
+ras_2d_wse <- read_csv("data/hec_ras_2d_profile_wse_max.csv") %>%
+  janitor::clean_names()
+
+ras_2d_wse_q100 <- read_csv("data/hec_ras_2d_profile_wse_max_q100.csv") %>%
+  janitor::clean_names()
+
+ras_2d_gse_bda <- read_csv("data/hec_ras_2d_profile_terrain_bda.csv") %>%
+  janitor::clean_names()
+
+ras_2d_wse_bda <- read_csv("data/hec_ras_2d_profile_wse_max_bda.csv") %>%
+  janitor::clean_names()
+
+ras_2d_wse_q100_bda <- read_csv("data/hec_ras_2d_profile_wse_max_q100_bda.csv") %>%
+  janitor::clean_names()
+
+# Upper bank elevations calculated in ArcGIS
+bank_elev <- inner_join(
+    read_csv("data/bank_elev_lb.csv") %>%
+      janitor::clean_names() %>% 
+      rename(station_2d = objectid, bank_elev_left = elev) %>%
+      select(station_2d, bank_elev_left),
+    read_csv("data/bank_elev_rb.csv") %>%
+      janitor::clean_names() %>% 
+      rename(station_2d = objectid, bank_elev_right = elev) %>%
+      select(station_2d, bank_elev_right)
+  ) %>%
+  mutate(bank_elev_min = case_when(
+    bank_elev_left < bank_elev_right ~ bank_elev_left, 
+    TRUE ~bank_elev_right)) %>%
+  mutate(bank_elev_rolling_med = zoo::rollapply(bank_elev_min, 100, median, partial=T))
+
+# # Floodplain elevations (25ft from thalweg) calculated in ArcGIS
+# floodplain_elev <- inner_join(
+#     read_csv("data/bank_elev_lb_floodplain.csv") %>%
+#       janitor::clean_names() %>% 
+#       rename(station_2d = objectid, floodplain_elev_left = elev) %>%
+#       select(station_2d, floodplain_elev_left),
+#     read_csv("data/bank_elev_rb_floodplain.csv") %>%
+#       janitor::clean_names() %>% 
+#       rename(station_2d = objectid, floodplain_elev_right = elev) %>%
+#       select(station_2d, floodplain_elev_right)
+#   ) %>%
+#   mutate(floodplain_elev_min = case_when(
+#     floodplain_elev_left < floodplain_elev_right ~ floodplain_elev_left, 
+#     TRUE ~floodplain_elev_right)) %>%
+#   mutate(floodplain_elev_rolling_med = zoo::rollapply(floodplain_elev_min, 100, median, partial=T))
+
+
+#  ggplot() + 
+#    geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile")) + 
+#    geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)")) +
+#    geom_line(data = ras_2d_wse_q100, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), linetype = "dotted") +
+#    geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), linetype = "dashed") + 
+#    geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), linetype = "dashed") +
+#    geom_point(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation, color = "Terrain Profile")) +
+#    geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "Surveyed HWM"), shape = 9, size = 4) + 
+#    geom_point(data = filter(ras_1d, profile=="31 Dec 2022"), aes(x = station_2d, y = w_s_elev_ft, color = "Water Surface (RAS)")) +
+#    #geom_smooth(data = bank_elev, aes(x = station_2d, y = bank_elev_rolling_med, color = "Appx. Ground Surface"), 
+#    #            method = "gam", linetype = "dashed", size = 0.75) +
+#    #geom_smooth(data = floodplain_elev, aes(x = station_2d, y = floodplain_elev_rolling_med, color = "Appx. Ground Surface"), 
+#    #            method = "gam", linetype = "dashed", size = 0.75) +
+#    tidyquant::geom_ma(data = bank_elev, aes(x = station_2d, y = bank_elev_min, color = "Appx. Ground Surface"), ma_fun = EMA, n = 100) +
+#    #tidyquant::geom_ma(data = floodplain_elev, aes(x = station_2d, y = floodplain_elev_min, color = "Appx. Ground Surface"), 
+#    #                   ma_fun = SMA, n = 100) +
+#    scale_color_manual(values = c("Terrain Profile" = "black", 
+#                                  "Appx. Ground Surface" = "black", 
+#                                  "Water Surface (RAS)" = "blue",
+#                                  "Surveyed HWM" = "red")) + 
+#    theme(legend.position = "none")
+
+```
+
+```{r}
+# ggplot() + 
+#   geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile")) + 
+#   geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)")) +
+#   geom_line(data = ras_2d_wse_q100, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), linetype = "dotted") +
+#   geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), linetype = "dashed") + 
+#   geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), linetype = "dashed") +
+#   geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "Surveyed HWM"), shape = 9, size = 4) + 
+#   geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "Surveyed HWM"), shape = 9, size = 4) + 
+#   tidyquant::geom_ma(data = bank_elev, aes(x = station_2d, y = bank_elev_min, color = "Appx. Ground Surface"), ma_fun = EMA, n = 100) +
+#   scale_color_manual(values = c("Terrain Profile" = "black", 
+#                                 "Appx. Ground Surface" = "black", 
+#                                 "Water Surface (RAS)" = "blue",
+#                                 "Surveyed HWM" = "red")) + 
+#   theme(legend.position = "none") +ggtitle("2D model result")
+```
+
+```{r}
+ggplot() + 
+  geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain")) + 
+  tidyquant::geom_ma(data = bank_elev, aes(x = station_2d, y = bank_elev_min, color = "Terrain"), 
+                     ma_fun = EMA, n = 100, linetype = "dotted") +
+  geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "31 Dec 2022"), shape = 9, size = 4) + 
+  geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "31 Dec 2022")) +
+  geom_line(data = ras_2d_wse_q100, aes(x = station_ft, y = wse_max_feet, color = "Q100 AC")) +
+#  geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), #linetype = "dashed") + 
+#  geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), #linetype = "dashed") +
+  scale_color_manual(values = c("Terrain" = "black", 
+                                "31 Dec 2022" = "blue",
+                                "Q100 AC" = "orange")) + 
+  theme(legend.position = "none") +ggtitle("2D model result") + theme(legend.position = "right", legend.title=element_blank()) + 
+  geom_text(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation - 1, color = "Terrain", label = cross_section )) 
+```
+
+```{r}
+ggplot() + 
+  geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain")) + 
+  tidyquant::geom_ma(data = bank_elev, aes(x = station_2d, y = bank_elev_min, color = "Terrain"), 
+                     ma_fun = EMA, n = 100, linetype = "dotted") +
+  #geom_point(data = hwm_dec_2022, aes(x = station_2d, y = hwm_elevation, color = "31 Dec 2022"), shape = 9, size = 4) + 
+  geom_line(data = ras_2d_wse, aes(x = station_ft, y = wse_max_feet, color = "31 Dec 2022")) +
+  geom_line(data = ras_2d_wse_q100, aes(x = station_ft, y = wse_max_feet, color = "Q100 AC")) +
+  geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), linetype = "dashed") + 
+  geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "31 Dec 2022"), linetype = "dashed") +
+  geom_line(data = ras_2d_wse_q100_bda, aes(x = station_ft, y = wse_max_feet, color = "Q100 AC"), linetype = "dashed") +
+  scale_color_manual(values = c("Terrain" = "black", 
+                                "31 Dec 2022" = "blue",
+                                "Q100 AC" = "orange")) + 
+  theme(legend.position = "none") +ggtitle("2D model result") + theme(legend.position = "right", legend.title=element_blank()) + 
+    geom_text(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation - 1, color = "Terrain", label = cross_section )) 
+
+```
+
+
+
+```{r}
+ras_2d_wse %>% 
+  # join to the cross section table
+  mutate(station_2d = as.integer(station_ft)) %>%
+  group_by(station_2d) %>% 
+  summarize(wse_2d = mean(wse_max_feet)) %>%
+  inner_join(cross_sections) %>%
+  inner_join(hwm_geometries %>% filter(peak_flow_date == ymd("2022-12-31"))) %>%
+  select(cross_section, hwm_elevation, wse_2d) %>%
+  mutate(error = wse_2d - hwm_elevation) %>%
+  pivot_longer(cols = c(hwm_elevation, wse_2d, error)) %>%
+  pivot_wider(names_from = cross_section, values_from = value) #%>% write_csv("ignore/validation2d.csv")
 ```
 
 

@@ -2,14 +2,23 @@
 title: "Time Series Analysis - Precip and NDVI"
 output:
   github_document: default
-  html_notebook: default
+  #html_notebook: default
 keep_md: true
 ---
 
 ```{r}
 library(tidyverse)
 library(lubridate)
-ggplot2::theme_set(theme_classic())
+
+
+sysfonts::font_add(family = "franklin-gothic", 
+                   regular = "./fonts/FRABK.TTF", 
+                   italic = "./fonts/FRABKIT.TTF", 
+                   bold = "./fonts/FRADM.TTF",
+                   bolditalic = "./fonts/FRADMIT.TTF")
+showtext::showtext_auto()
+ggplot2::theme_set(theme_classic() + theme(text = element_text(family = 'franklin-gothic')))
+knitr::opts_chunk$set(fig.width=9, fig.height=6) 
 
 ```
 
@@ -30,6 +39,8 @@ rawdata_mlr %>% saveRDS(file = "data/rawdata_mlr.rds")
 ```{r}
 rawdata_tas <- readRDS(file = "data/rawdata_tas.rds")
 rawdata_mlr <- readRDS(file = "data/rawdata_mlr.rds")
+
+# convert tipping bucket data to daily data
 
 inst_data_tas <- rawdata_tas %>%
   as_tibble() %>%
@@ -171,6 +182,9 @@ summary(model)
 alpha <- exp(model$coefficients["(Intercept)"])
 beta <- model$coefficients["log(hourly_filtered$precip_mlr_24h)"]
 
+hourly_filtered %>% ggplot(aes(y = precip_tas_24h, x = precip_mlr_24h)) + geom_point() + 
+  scale_x_log10() + scale_y_log10() + geom_smooth(method=lm)
+
 rolling24h_pred <- hourly %>% 
 #  mutate(precip_tas_24h_pred = alpha * precip_mlr_24h^beta)
    mutate(precip_tas_24h_pred = replace_na(case_when(date_hour < min(hourly_tas$date_hour) ~ alpha * precip_mlr_24h^beta, TRUE ~ precip_tas_24h),0))
@@ -195,6 +209,56 @@ rolling24h_pred %>%
     
 ```
 
+```{r}
+# IMPROVED VERSION USING ROLLING 24H WINDOW RATHER THAN CALENDAR 24H DAY -- IN PROGRESS
+hourly_tas <- inst_data_tas %>%
+  group_by(date_hour) %>%
+  summarize(precip_tas = sum(increment)) %>%
+  complete(date_hour) %>%
+  mutate(precip_tas_24h = zoo::rollapplyr(precip_tas, 24, sum, partial=T)) 
+
+hourly_mlr <- inst_data_mlr %>%
+  group_by(date_hour) %>%
+  summarize(precip_mlr = sum(increment)) %>%
+  complete(date_hour) %>%
+  mutate(precip_mlr_24h = zoo::rollapplyr(precip_mlr, 24, sum, partial=T)) 
+
+hourly <- hourly_mlr %>% left_join(hourly_tas) 
+
+hourly_filtered <- hourly %>% 
+  select(precip_tas_24h, precip_mlr_24h) %>%
+  filter(precip_tas_24h > 0, precip_mlr_24h > 0)
+model <- lm(log(hourly_filtered$precip_tas_24h) ~ log(hourly_filtered$precip_mlr_24h))
+summary(model)
+alpha <- exp(model$coefficients["(Intercept)"])
+beta <- model$coefficients["log(hourly_filtered$precip_mlr_24h)"]
+
+hourly_filtered %>% ggplot(aes(y = precip_tas_24h, x = precip_mlr_24h)) + geom_point() + 
+  scale_x_log10() + scale_y_log10() + geom_smooth(method=lm)
+
+rolling24h_pred <- hourly %>% 
+#  mutate(precip_tas_24h_pred = alpha * precip_mlr_24h^beta)
+   mutate(precip_tas_24h_pred = replace_na(case_when(date_hour < min(hourly_tas$date_hour) ~ alpha * precip_mlr_24h^beta, TRUE ~ precip_tas_24h),0))
+
+rolling24h_pred %>%
+  mutate(water_year = case_when(month(date_hour) >= 10 ~ year(date_hour) + 1, TRUE ~ year(date_hour))) %>% 
+  group_by(water_year) %>%
+  slice(which.max(precip_tas_24h_pred)) %>%
+  rename(precip_tas_24h_max = precip_tas_24h_pred, date_24h_max = date_hour) %>%
+  ggplot(aes(y = precip_tas_24h_max, x = as.factor(date_24h_max), fill = precip_tas_24h_max)) + 
+    geom_col(width = 1) +
+    geom_text(aes(label = round(precip_tas_24h_max, 1)), vjust=-0.5) +
+    scale_x_discrete(name = "Day of Water Year Max 24h Precipitation") +
+    scale_y_continuous(name = "Maximum 24h precipitation (inches)", expand = c(0, 0), limits = c(0, 20)) +
+    ggtitle("Maximum 24h precipitation (inches) at Tassajara") + 
+    scale_fill_viridis_c(direction = -1, option = "cividis") + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  theme(legend.position = "none")
+
+
+
+    
+```
 
 # PRISM Precipitation
 
@@ -210,13 +274,33 @@ prism_monthly <- read_csv("data/PRISM_ppt_tmin_tmean_tmax_tdmean_vpdmin_vpdmax_p
 ```
 ```{r}
 prism_monthly %>% 
-  filter(water_year>1997) %>%
-  ggplot(aes(y = ppt_inches, x = date %m+% months(3), fill = ppt_inches)) + 
-    geom_col() +
+  filter(water_year>=1997) %>%
+  ggplot(aes(y = ppt_inches, x = as.POSIXct(date %m+% months(3)), fill = ppt_inches, color = ppt_inches)) + 
+    geom_col() + #fill = "black") +
     scale_y_continuous(name = "Monthly total precipitation (inches)", expand = c(0, 0), limits = c(0, 15)) +
-    ggtitle("PRISM historical precipitation for Lower Tassajara Creek") + scale_fill_viridis_c(direction = -1, option = "cividis")  + 
-  theme(legend.position = "none")
+  scale_x_datetime(date_breaks = "1 year", date_labels = "%Y", name="", expand = c(0,0), 
+                   limits=c(as.POSIXct(ymd("1997-01-01")), as.POSIXct(ymd("2023-12-31")))) +
+    #ggtitle("PRISM historical precipitation for Lower Tassajara Creek") + 
+  scale_fill_viridis_c(direction = -1 , option = "cividis") + 
+  scale_color_viridis_c(direction = -1, option = "cividis") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position = "none") + 
+  geom_text(aes(y = ppt_inches + 1, label = case_when(ppt_inches > 9 ~ paste0(format(date, "%b-%Y"), "\n", ppt_inches), TRUE ~ NA)), size = 2)
 ```
+
+```{r}
+prism_monthly %>% 
+  filter(water_year>=2017) %>%
+  ggplot(aes(y = ppt_inches, x = as.POSIXct(date %m+% months(3)))) + #fill = ppt_inches, color = ppt_inches)) + 
+    geom_col(fill = "black") +
+    scale_y_continuous(name = "Monthly total precipitation (inches)", expand = c(0, 0), limits = c(0, 15)) +
+  scale_x_datetime(date_breaks = "1 year", date_labels = "%Y", name="", expand = c(0,0), 
+                   limits=c(as.POSIXct(ymd("2017-01-01")), as.POSIXct(ymd("2023-12-31")))) +
+    #ggtitle("PRISM historical precipitation for Lower Tassajara Creek") + 
+  #scale_fill_viridis_c(direction = -1, option = "cividis") + 
+  #scale_color_viridis_c(direction = -1, option = "cividis") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position = "none")
+```
+
 
 ```{r}
 
