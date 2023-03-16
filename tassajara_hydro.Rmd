@@ -537,7 +537,7 @@ hwm_hydraulics <- hwm_geometries %>%
          # metric conversions
          velocity_m_s = velocity_ft_s / 0.3048,
          hydraulic_radius_m = hydraulic_radius_ft / 0.3048,
-         cross_sectional_area_m2 = cross_sectional_area_ft2 / 0.3048,
+         cross_sectional_area_m2 = cross_sectional_area_ft2 / 0.3048^2,
          # bed mobilization
          critical_shields_number = 0.15 * slope^(1/4),
          grain_size_mobilized_mm = 10 * rho_cgs * hydraulic_radius_m * slope / 
@@ -633,7 +633,7 @@ ras_1d_sed <- ras_1d_pivot %>%
                        # metric conversions
                        velocity_m_s = velocity_ft_s / 0.3048,
                        hydraulic_radius_m = hydraulic_radius_ft / 0.3048,
-                       cross_sectional_area_m2 = cross_sectional_area_ft2 / 0.3048,
+                       cross_sectional_area_m2 = cross_sectional_area_ft2 / 0.3048^2,
                        # bed mobilization
                        critical_shields_number = 0.15 * slope^(1/4),
                        grain_size_mobilized_mm = 10 * rho_cgs * hydraulic_radius_m * slope / 

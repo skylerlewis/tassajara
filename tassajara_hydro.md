@@ -680,7 +680,7 @@ hwm_hydraulics <- hwm_geometries %>%
          # metric conversions
          velocity_m_s = velocity_ft_s / 0.3048,
          hydraulic_radius_m = hydraulic_radius_ft / 0.3048,
-         cross_sectional_area_m2 = cross_sectional_area_ft2 / 0.3048,
+         cross_sectional_area_m2 = cross_sectional_area_ft2 / 0.3048^2,
          # bed mobilization
          critical_shields_number = 0.15 * slope^(1/4),
          grain_size_mobilized_mm = 10 * rho_cgs * hydraulic_radius_m * slope / 
@@ -827,7 +827,7 @@ ras_1d_sed <- ras_1d_pivot %>%
                        # metric conversions
                        velocity_m_s = velocity_ft_s / 0.3048,
                        hydraulic_radius_m = hydraulic_radius_ft / 0.3048,
-                       cross_sectional_area_m2 = cross_sectional_area_ft2 / 0.3048,
+                       cross_sectional_area_m2 = cross_sectional_area_ft2 / 0.3048^2,
                        # bed mobilization
                        critical_shields_number = 0.15 * slope^(1/4),
                        grain_size_mobilized_mm = 10 * rho_cgs * hydraulic_radius_m * slope / 
@@ -1428,11 +1428,11 @@ ras_2d_wse %>%
     ## Joining with `by = join_by(cross_section)`
 
     ## # A tibble: 3 × 7
-    ##   name               B       D       E       F       G       H
-    ##   <chr>          <dbl>   <dbl>   <dbl>   <dbl>   <dbl>   <dbl>
-    ## 1 hwm_elevation 365.   361.    356.    353.    350.    347.   
-    ## 2 wse_2d        364.   361.    357.    354.    351.    348.   
-    ## 3 error          -1.14  -0.686   0.511   0.283   0.858   0.480
+    ##   name               B       D       E        F       G       H
+    ##   <chr>          <dbl>   <dbl>   <dbl>    <dbl>   <dbl>   <dbl>
+    ## 1 hwm_elevation 365.   361.    356.    353.     350.    347.   
+    ## 2 wse_2d        364.   360.    357.    354.     351.    347.   
+    ## 3 error          -1.28  -0.852   0.401   0.0550   0.549   0.106
 
 ``` r
 # summarize at-a-station hydraulics for 2D results
@@ -1492,11 +1492,11 @@ ras_2d_hydraulics %>%
     ##   station_2d wse_2d   slope cross_sec…¹ stati…² culvert xs_df    thalw…³ water…⁴
     ##        <dbl>  <dbl>   <dbl> <chr>         <dbl> <chr>   <list>     <dbl>   <dbl>
     ## 1        490   364. 0.00600 B             10800 <NA>    <tibble>    352.    364.
-    ## 2       1210   361. 0.00500 D             10200 <NA>    <tibble>    348.    361.
-    ## 3       2061   357. 0.0103  E              9300 <NA>    <tibble>    344.    357.
+    ## 2       1210   360. 0.00400 D             10200 <NA>    <tibble>    348.    360.
+    ## 3       2061   357. 0.0107  E              9300 <NA>    <tibble>    344.    357.
     ## 4       2568   354. 0.00200 F              8800 <NA>    <tibble>    343.    354.
-    ## 5       3157   351. 0.00733 G              8200 <NA>    <tibble>    342.    351.
-    ## 6       3828   348. 0.00567 H              7600 <NA>    <tibble>    339.    348.
+    ## 5       3157   351. 0.00867 G              8200 <NA>    <tibble>    342.    351.
+    ## 6       3828   347. 0.00358 H              7600 <NA>    <tibble>    339.    347.
     ## # … with 20 more variables: max_depth <dbl>, cross_sectional_area_ft2 <dbl>,
     ## #   wetted_perimeter_ft <dbl>, hwm_elevation <dbl>, hwm_difference <dbl>,
     ## #   discharge_cfs <dbl>, velocity_ft_s <dbl>, hydraulic_radius_ft <dbl>,
