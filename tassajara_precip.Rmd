@@ -116,7 +116,7 @@ daily_data_pred %>%
     #scale_fill_viridis_c(direction = -1) + 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-ggsave("barchart.svg")
+#ggsave("barchart.svg")
 
 daily_data_pred %>% write_csv("data/daily_data_pred.csv")
 
@@ -321,11 +321,13 @@ prism_yearly %>%
     geom_col(width = 1) +
     geom_text(aes(label = case_when(water_year %in% prism_yearly_top$water_year ~ paste(water_year, ppt_inches, sep = "\n"), TRUE ~ NA)), vjust=-0.25) +
     #scale_fill_brewer()
-    scale_fill_viridis_d(direction = -1, option = "viridis", name = "Quartile of anual precip.") +
+    scale_fill_viridis_d(direction = -1, option = "viridis", name = "Quartile of annual precip.") +
     scale_x_continuous(name ="Water Year", breaks = seq(1890, 2020, by = 10), expand = c(0,0)) +
     scale_y_continuous(name = "Annual total precipitation (inches)", expand = c(0, 0), limits = c(0, 50)) +
     #ggtitle("PRISM historical precipitation for Lower Tassajara Creek")  + 
   theme(legend.position = "top")
+
+ggsave(file="out/prism_annual.svg", plot=last_plot(), width=9, height=6)
 
 ``` 
 
@@ -355,6 +357,8 @@ prism_monthly  %>%
   scale_fill_viridis_c(direction = -1, option = "viridis") + geom_vline(xintercept=9.5, linetype="dashed") + 
   theme(legend.position = "none")
   
+ggsave(file="out/prism_climate.svg", plot=last_plot(), width=9, height=6)
+
 ```
 
 # Landsat NDVI
@@ -373,23 +377,30 @@ ndvi_time_series_interp <- ndvi_time_series %>%
 ```{r}
 
 ggplot() + 
-geom_line(data = ndvi_time_series_interp, aes(y = ndvi, x = time), color="darkolivegreen2") +
-geom_line(data = ndvi_time_series_interp, aes(y = rolling_ndvi, x = time), color="seagreen") +
-scale_y_continuous(name = "NDVI",)
+geom_line(data = ndvi_time_series_interp, aes(y = ndvi, x = time), color="#a9b5ae", size=.25) +
+geom_line(data = ndvi_time_series_interp, aes(y = rolling_ndvi, x = time), color="black", size=1) +
+scale_y_continuous(name = "NDVI") + xlab("")
+ggsave(file="out/ts_ndvi.svg", plot=last_plot(), width=9, height=6)
 
 ```
 
 ```{r}
 
 ggplot() + 
-geom_line(data = ndvi_time_series_interp, aes(y = ndvi, x = time), color="gray", size=.25) +
-geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(2, 3, 4)),   aes(y = ndvi, x = time), color="blue", size = 1) +
-geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(5, 6, 7)),   aes(y = ndvi, x = time), color="gray", size = 1) +
-geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(8, 9, 10)),  aes(y = ndvi, x = time), color="red",  size = 1) +
-geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(11, 12, 1)), aes(y = ndvi, x = time), color="gray", size = 1) +
-geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c()),   aes(y = ndvi, x = time), color="gray", size = 1) +
+geom_line(data = ndvi_time_series_interp, aes(y = ndvi, x = time), color="#a9b5ae", size=.25) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(2, 3, 4)),   aes(y = ndvi, x = time, color = "1"), size = 1.5) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(5, 6, 7)),   aes(y = ndvi, x = time, color = "2"), size = 1.5) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(8, 9, 10)),  aes(y = ndvi, x = time, color = "3"), size = 1.5) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(11, 12, 1)), aes(y = ndvi, x = time, color = "4"), size = 1.5) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c()),   aes(y = ndvi, x = time), color="#a9b5ae",        size = 1.5) +
 geom_line(data = ndvi_time_series_interp, aes(y = rolling_ndvi, x = time), color="black", size = 1) +
-scale_y_continuous(name = "NDVI",) + ggtitle("Landsat NDVI Time Series 1989-2023")
+scale_y_continuous(name = "NDVI") + xlab("")+ 
+scale_color_manual(values = c("1"="#ffae34", "2"="#a9b5ae", "3"="#55ad89", "4"="#a9b5ae"),
+                  labels = c("1"="Feb/Mar/Apr", "2"="May/Jun/Jul", "3"="Aug/Sep/Oct", "4"="Nov/Dec/Jan"), name = "") +
+theme(legend.position = "top")
+ggsave(file="out/ts_ndvi_points.svg", plot=last_plot(), width=9, height=6)
+
+#+ ggtitle("Landsat NDVI Time Series 1989-2023")
 
 ```
 
@@ -406,7 +417,14 @@ ndvi_time_series_interp %>%
   mutate(se_ndvi = sd_ndvi / sqrt(n_ndvi)) %>%
   ggplot(aes(x = time_month, fill = after_restoration)) + 
   geom_col(aes(y = mean_ndvi), position = "dodge") +
-  scale_y_continuous(expand = c(0, 0))  + ggtitle("Landsat average NDVI by month, 1989-1999 vs 2000-2023")
+  scale_y_continuous(expand = c(0, 0))  + 
+  #ggtitle("Landsat average NDVI by month, 1989-1999 vs 2000-2023") +
+  ylab("Mean NDVI") + xlab("") +
+  scale_fill_manual(values = c("FALSE" = "#c3bc3f", "TRUE" = "#6388b4"), labels = c("FALSE" = "1989-1999", "TRUE" = "2000-2023"), name = "") +
+  theme(legend.position = "top")
+
+ggsave(file="out/ts_ndvi_months.svg", plot=last_plot(), width=9, height=6)
+
 
 ```
 
@@ -430,7 +448,13 @@ ndvi_time_series_interp %>%
   ggplot(aes(y = time_month, color = after_restoration)) + 
   geom_point(aes(x = model_slope)) +
   geom_errorbarh(aes(xmin = model_slope - 1.96*model_se, xmax = model_slope + 1.96*model_se)) + 
-  geom_vline(xintercept = 0) + scale_y_discrete(limits = rev) + ggtitle("Landsat change in NDVI per year by month, 1989-1999 vs 2000-2023")
+  geom_vline(xintercept = 0) + scale_y_discrete(limits = rev) + 
+  #ggtitle("Landsat change in NDVI per year by month, 1989-1999 vs 2000-2023") + 
+  xlab("Average change in NDVI per year") + ylab("") +
+  scale_color_manual(values = c("FALSE" = "#c3bc3f", "TRUE" = "#6388b4"), labels = c("FALSE" = "1989-1999", "TRUE" = "2000-2023"), name = "") +
+  theme(legend.position = "top")
+ggsave(file="out/ts_ndvi_trend.svg", plot=last_plot(), width=9, height=6)
+
 #https://www.statology.org/extract-coefficients-from-lm-in-r/
 ```
 

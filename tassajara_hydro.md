@@ -126,27 +126,34 @@ new_years_storm_pred %>%
   geom_tile(aes(y = maxRange - rain_intensity_in/coeff/2, 
                 height = rain_intensity_in/coeff, 
                 color = "precip", fill = "precip")) +
-  scale_y_continuous(name = "streamflow (cfs)",
+  scale_y_continuous(name = "Streamflow (cfs)",
                      limit = c(0, maxRange),
                      expand = c(0, 0),
                      sec.axis = sec_axis(trans = ~(.-maxRange)*coeff, 
-                                         name = "precipitation (in/hr)")) +
+                                         name = "Precipitation (in/hr)")) +
   theme(legend.position = 'none') + 
-  ggtitle("Dec 2022 - Jan 2023 rainfall and streamflow") +
+  #ggtitle("Dec 2022 - Jan 2023 rainfall and streamflow") +
   geom_hline(yintercept = 650 , linetype = "dashed") + annotate("text", x=as.POSIXct(ymd("2023-01-21")), y=100+650 , label="Q2 = 650 cfs") +
   geom_hline(yintercept = 1200, linetype = "dashed") + annotate("text", x=as.POSIXct(ymd("2023-01-21")), y=100+1200, label="Q5 = 1200 cfs") +
-  scale_fill_manual(values = c("precip" = "#6388bd", "q" = "black", "q_pred" = "#777777"),
+  scale_fill_manual(values = c("precip" = "black", "q" = "#499894", "q_pred" = "#86bcb6"),
                     labels = c("precip" = "Precipitation", "q" = "Streamflow (gauged)", "q_pred" = "Streamflow (predicted)"),
                     name = NULL) +
-  scale_color_manual(values = c("precip" = "#6388bd", "q" = "black", "q_pred" = "#777777"),
+  scale_color_manual(values = c("precip" = "black", "q" = "#499894", "q_pred" = "#86bcb6"),
                     labels = c("precip" = "Precipitation", "q" = "Streamflow (gauged)", "q_pred" = "Streamflow (predicted)"),
                     name = NULL) +
-  scale_x_datetime(date_breaks = "days" , date_labels = "%d")  #\n%b") + 
+  scale_x_datetime(date_breaks = "days" , date_labels = "%d") + 
+  xlab("Date (December 2022 - January 2023)") #\n%b") + 
 ```
 
     ## Warning: Removed 69 rows containing non-finite values (`stat_align()`).
 
 ![](tassajara_hydro_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+
+``` r
+ggsave(file="out/hyeto_hydro.svg", plot=last_plot(), width=9, height=6)
+```
+
+    ## Warning: Removed 69 rows containing non-finite values (`stat_align()`).
 
 ``` r
 # figure out the peak flow from the December storm
@@ -206,19 +213,26 @@ ggplot() + geom_line(data = ras_hydro_q100, aes(x = result_datetime, y = cfs))
 
 ``` r
 ggplot() + 
-  geom_line(data = ras_hydro_q100, aes(x = result_datetime, y = cfs, color = "4. Scaled for Q100(AC)")) +
-  geom_line(data = ras_hydro_dec, aes(x = result_datetime, y = cfs, color = "3. Modified for US BC")) + 
+  geom_line(data = ras_hydro_q100, aes(x = result_datetime, y = cfs ,color = "4. Scaled for Q100(AC)"), linewidth=1) +
+  geom_line(data = ras_hydro_dec, aes(x = result_datetime, y = cfs, color = "3. Minimum applied for US BC"), linewidth=1) + 
   geom_line(data = new_years_storm_pred %>% filter(result_datetime >= ymd("2022-12-31") & result_datetime < ymd("2023-01-02")), 
-            aes(x = result_datetime, y = streamflow_cfs_pred, color = "2. Extrapolated")) +
+            aes(x = result_datetime, y = streamflow_cfs_pred, color = "2. Extrapolated"), linewidth=1) +
   geom_line(data = new_years_storm_pred %>% filter(result_datetime >= ymd("2022-12-31") & result_datetime < ymd("2023-01-02")), 
-            aes(x = result_datetime, y = streamflow_cfs, color = "1. Raw")) + 
-  scale_color_manual(values = c("black", "red", "purple", "orange")) + 
+            aes(x = result_datetime, y = streamflow_cfs, color = "1. Raw"), linewidth=1) + 
+  scale_color_manual(values = c("#499894", "#86bcb6", "black", "#ffae34"), name="") + 
   scale_size_manual(values = c(2, 1, 2, 1)) + 
-  scale_linetype_manual(values = c("solid", "dashed", "dashed", "dashed")) + 
-  theme(legend.position = "top")
+  #scale_linetype_manual(values = c("solid", "dashed", "dashed", "dashed")) +
+  theme(legend.position = "bottom")+
+  xlab("") + ylab("Streamflow (cfs)") + scale_x_datetime(position = "top") 
 ```
 
 ![](tassajara_hydro_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+
+``` r
+ggsave(file="out/ras_hydro.svg", plot=last_plot(), width=9, height=6)
+ggsave(file="out/ras_hydro_short.svg", plot=last_plot(), width=9, height=4) 
+```
+
 Examine specific storms
 
 ``` r
@@ -953,7 +967,14 @@ ggplot() +
   geom_point(data = xs_depth_vs_discharge, aes(x = depth, y = q_total_cfs, color = cross_section, shape = "modeled")) + 
   #geom_line(data = xs_depth_vs_discharge, aes(x = depth, y = q_total_cfs, color = cross_section, shape = "modeled")) +
   geom_smooth(data = xs_depth_vs_discharge, aes(x = depth, y = q_total_cfs, color = cross_section), method = "lm", se = F, linewidth=0.5) +
-  scale_x_log10() + scale_y_log10()
+  scale_x_log10() + scale_y_log10() +
+  scale_color_manual(values = c("B" = "#ef6f6a",
+                                "D" = "#ffae34",
+                                "E" = "#55ad89",
+                                "F" = "#c3bc3f",
+                                "G" = "#6388b4",
+                                "H" = "#8cc2ca"
+                                 )) 
 ```
 
     ## `geom_smooth()` using formula = 'y ~ x'
@@ -1040,13 +1061,22 @@ ras_1d_sed %>%
   facet_grid(cols = vars(series)) + ggtitle("Velocity (via 1D model)") +
   geom_hline(yintercept=10, linetype='dotted', col = 'red') + 
   scale_x_continuous(breaks = breaks$q_total_cfs, labels = breaks$profile, position = "top", name = "", 
-                     sec.axis = sec_axis(trans = ~ ., name = "discharge (cfs)")) + 
-  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
+                     sec.axis = sec_axis(trans = ~ ., name = "Discharge (cfs)")) + 
+  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0)) +
+  scale_color_manual(values = c("B" = "#ef6f6a",
+                                "D" = "#ffae34",
+                                "E" = "#55ad89",
+                                "F" = "#c3bc3f",
+                                "G" = "#6388b4",
+                                "H" = "#8cc2ca"
+                                 )) + ylab("Velocity (ft/s)")
 ```
 
 ![](tassajara_hydro_files/figure-gfm/unnamed-chunk-27-1.png)<!-- -->
 
 ``` r
+ggsave(file="out/q_velocity.svg", plot=last_plot(), width=9, height=6)
+
 ras_1d_sed %>% 
   filter(loc != "total") %>%
   #group_by(series, cross_section, profile, q_total_cfs) %>% 
@@ -1056,18 +1086,27 @@ ras_1d_sed %>%
   facet_grid(cols = vars(series)) + ggtitle("Bed Mobilization (via 1D model)") +
   scale_y_continuous(limits = c(0,20), breaks = c(2^0, 2^1, 2^2, 2^3, 2^4)) + 
     scale_x_continuous(breaks = breaks$q_total_cfs, labels = breaks$profile, position = "top", name = "", 
-                     sec.axis = sec_axis(trans = ~ ., name = "discharge (cfs)")) + 
+                     sec.axis = sec_axis(trans = ~ ., name = "Discharge (cfs)")) + 
   geom_hline(yintercept=2^0, col = "gray", linetype = "dotted") +
   geom_hline(yintercept=2^1,   col = "gray", linetype = "dotted") +
   geom_hline(yintercept=2^2,   col = "gray", linetype = "dotted") +
   geom_hline(yintercept=2^3,   col = "gray", linetype = "dotted") +
   geom_hline(yintercept=2^4 ,  col = "gray", linetype = "dotted") +
-  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0))
+  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0)) +
+  scale_color_manual(values = c("B" = "#ef6f6a",
+                                "D" = "#ffae34",
+                                "E" = "#55ad89",
+                                "F" = "#c3bc3f",
+                                "G" = "#6388b4",
+                                "H" = "#8cc2ca"
+                                 )) + ylab("Grain Size (mm)")
 ```
 
 ![](tassajara_hydro_files/figure-gfm/unnamed-chunk-27-2.png)<!-- -->
 
 ``` r
+ggsave(file="out/q_sed_bedmobiliz.svg", plot=last_plot(), width=9, height=6)
+
 ras_1d_sed %>% 
   filter(loc != "total") %>%
   #group_by(series, cross_section, profile, q_total_cfs) %>% 
@@ -1077,17 +1116,28 @@ ras_1d_sed %>%
   facet_grid(cols = vars(series)) + ggtitle("Suspended Transport (via 1D model)") +
   scale_y_continuous(limits = c(0,2.25), breaks = c(2^-4, 2^-3, 2^-2, 2^-1, 2^0, 2^1)) +
     scale_x_continuous(breaks = breaks$q_total_cfs, labels = breaks$profile, position = "top", name = "", 
-                     sec.axis = sec_axis(trans = ~ ., name = "discharge (cfs)")) + 
+                     sec.axis = sec_axis(trans = ~ ., name = "Discharge (cfs)")) + 
   geom_hline(yintercept=2^-4, col = "gray", linetype = "dotted") +
   geom_hline(yintercept=2^-3,   col = "gray", linetype = "dotted") +
   geom_hline(yintercept=2^-2,   col = "gray", linetype = "dotted") +
   geom_hline(yintercept=2^-1,   col = "gray", linetype = "dotted") +
   geom_hline(yintercept=2^0 ,  col = "gray", linetype = "dotted") +
   geom_hline(yintercept=2^1 ,  col = "gray", linetype = "dotted") +
-  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0)) 
+  theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0)) +
+  scale_color_manual(values = c("B" = "#ef6f6a",
+                                "D" = "#ffae34",
+                                "E" = "#55ad89",
+                                "F" = "#c3bc3f",
+                                "G" = "#6388b4",
+                                "H" = "#8cc2ca"
+                                 )) + ylab("Grain Size (mm)")
 ```
 
 ![](tassajara_hydro_files/figure-gfm/unnamed-chunk-27-3.png)<!-- -->
+
+``` r
+ggsave(file="out/q_sed_suspended.svg", plot=last_plot(), width=9, height=6)
+```
 
 ``` r
 ras_1d_sed %>% 
@@ -1100,17 +1150,28 @@ ras_1d_sed %>%
   #facet_grid(cols = vars(series)) + 
   ggtitle("Velocity (via 1D model)") +
   scale_x_continuous(breaks = breaks$q_total_cfs, labels = breaks$profile, position = "top", name = "", 
-                     sec.axis = sec_axis(trans = ~ ., name = "discharge (cfs)")) + 
+                     sec.axis = sec_axis(trans = ~ ., name = "Discharge (cfs)")) + 
   theme(axis.text.x.top = element_text(angle = 45, vjust = 0, hjust=0), panel.grid.major.y = element_blank()) + 
   geom_hline(yintercept=1.5, col = "gray", linetype = "dotted") +
   geom_hline(yintercept=3,   col = "gray", linetype = "dotted") +
   geom_hline(yintercept=4,   col = "gray", linetype = "dotted") +
   geom_hline(yintercept=6,   col = "gray", linetype = "dotted") +
   geom_hline(yintercept=10,  col = "gray", linetype = "dotted") +
-  scale_y_continuous(breaks = c(0, 1.5, 3, 4, 6, 10)) 
+  scale_y_continuous(breaks = c(0, 1.5, 3, 4, 6, 10)) +
+  scale_color_manual(values = c("B" = "#ef6f6a",
+                                "D" = "#ffae34",
+                                "E" = "#55ad89",
+                                "F" = "#c3bc3f",
+                                "G" = "#6388b4",
+                                "H" = "#8cc2ca"
+                                 )) + ylab("Velocity (ft/s)")
 ```
 
 ![](tassajara_hydro_files/figure-gfm/unnamed-chunk-28-1.png)<!-- -->
+
+``` r
+ggsave(file="out/q_velocity_stacked.svg", plot=last_plot(), width=9, height=6)
+```
 
 ``` r
 ras_1d %>% 
@@ -1124,16 +1185,19 @@ ras_1d %>%
     scale_x_reverse() + theme(legend.title=element_blank()) + 
     geom_point(aes(y = water_surface_elevation), shape = 9, size = 4) + 
     geom_text(data = left_join(hwm_dec_2022, capacity), aes(x = station_1d, y = capacity_wse, label = "—"), color = "black", size = 4) +
-  scale_color_manual(values = c("Q100 AC" = "lightblue",
-                                "Q100 BKF" = "lightblue",
-                                "Q25 BKF" = "lightblue",
-                                "Q5 Channel" = "lightblue",
-                                "Q2 BKF" = "lightblue",
-                                "14 Jan 2023" = "darkorange",
-                                "31 Dec 2022" = "darkmagenta",
-                                "13 Feb 2019" = "darkgreen",
-                                "11 Nov 2022" = "darkred"
-                                 )) #+ 
+  scale_color_manual(values = c("Q100 AC" = "#8cc2ca",
+                                "Q100 BKF" = "#8cc2ca",
+                                "Q25 BKF" = "#8cc2ca",
+                                "Q5 Channel" = "#8cc2ca",
+                                "Q2 BKF" = "#8cc2ca",
+                                "14 Jan 2023" = "#ffae34",
+                                "31 Dec 2022" = "#bb7693",
+                                "13 Feb 2019" = "#c3bc3f",
+                                "11 Nov 2022" = "#55ad89"
+                                 )) +
+    #ggtitle("2D model result") + 
+  xlab("Station (ft) (Zone 7)") + 
+  ylab("Elevation (ft NGVD29)") 
 ```
 
     ## Joining with `by = join_by(cross_section, peak_flow_date)`
@@ -1144,6 +1208,13 @@ ras_1d %>%
 ![](tassajara_hydro_files/figure-gfm/unnamed-chunk-32-1.png)<!-- -->
 
 ``` r
+ggsave(file="out/lp_1d_wse.svg", plot=last_plot(), width=9, height=6)
+```
+
+    ## Warning: Removed 56 rows containing missing values (`geom_point()`).
+
+``` r
+  #+ 
     #scale_linetype_manual(values = c("Q100 AC" = "dashed",
     #                            "Q100 BKF" = "solid",
     #                            "Q25 BKF" = "solid",
@@ -1228,7 +1299,7 @@ ras_2d_gse_bda <- read_csv("data/hec_ras_2d_profile_terrain_bda.csv") %>%
   janitor::clean_names()
 ```
 
-    ## Rows: 27343 Columns: 3
+    ## Rows: 29491 Columns: 3
     ## ── Column specification ────────────────────────────────────────────────────────
     ## Delimiter: ","
     ## dbl (3): ID, Station (ft), Terrain Profile (ft)
@@ -1241,7 +1312,7 @@ ras_2d_wse_bda <- read_csv("data/hec_ras_2d_profile_wse_max_bda.csv") %>%
   janitor::clean_names()
 ```
 
-    ## Rows: 7022 Columns: 3
+    ## Rows: 7020 Columns: 3
     ## ── Column specification ────────────────────────────────────────────────────────
     ## Delimiter: ","
     ## dbl (3): ID, Station (ft), WSE 'Max' (feet)
@@ -1254,7 +1325,7 @@ ras_2d_wse_q100_bda <- read_csv("data/hec_ras_2d_profile_wse_max_q100_bda.csv") 
   janitor::clean_names()
 ```
 
-    ## Rows: 7022 Columns: 3
+    ## Rows: 7020 Columns: 3
     ## ── Column specification ────────────────────────────────────────────────────────
     ## Delimiter: ","
     ## dbl (3): ID, Station (ft), WSE 'Max' (feet)
@@ -1367,9 +1438,13 @@ ggplot() +
 #  geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), #linetype = "dashed") + 
 #  geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "Water Surface (RAS)"), #linetype = "dashed") +
   scale_color_manual(values = c("Terrain" = "black", 
-                                "31 Dec 2022" = "blue",
-                                "Q100 AC" = "orange")) + 
-  theme(legend.position = "none") +ggtitle("2D model result") + theme(legend.position = "right", legend.title=element_blank()) + 
+                                "31 Dec 2022" = "#499894",
+                                "Q100 AC" = "#ffae34")) + 
+  theme(legend.position = "none") + 
+  #ggtitle("2D model result") + 
+  xlab("Station (ft from upstream boundary)") + 
+  ylab("Elevation (ft NGVD29)") +
+  theme(legend.position = "none") + #theme(legend.position = "right", legend.title=element_blank()) + 
   geom_text(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation - 1, color = "Terrain", label = cross_section )) 
 ```
 
@@ -1386,6 +1461,13 @@ ggplot() +
 ![](tassajara_hydro_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
 
 ``` r
+ggsave(file="out/lp_2d_wse.svg", plot=last_plot(), width=9, height=6)
+```
+
+    ## Warning: Removed 23 rows containing missing values (`geom_line()`).
+    ## Removed 23 rows containing missing values (`geom_line()`).
+
+``` r
 ggplot() + 
   geom_line(data = ras_2d_gse, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain")) + 
   tidyquant::geom_ma(data = bank_elev, aes(x = station_2d, y = bank_elev_min, color = "Terrain"), 
@@ -1396,11 +1478,15 @@ ggplot() +
   geom_line(data = ras_2d_gse_bda, aes(x = station_ft, y = terrain_profile_ft, color = "Terrain Profile"), linetype = "dashed") + 
   geom_line(data = ras_2d_wse_bda, aes(x = station_ft, y = wse_max_feet, color = "31 Dec 2022"), linetype = "dashed") +
   geom_line(data = ras_2d_wse_q100_bda, aes(x = station_ft, y = wse_max_feet, color = "Q100 AC"), linetype = "dashed") +
-  scale_color_manual(values = c("Terrain" = "black", 
-                                "31 Dec 2022" = "blue",
-                                "Q100 AC" = "orange")) + 
-  theme(legend.position = "none") +ggtitle("2D model result") + theme(legend.position = "right", legend.title=element_blank()) + 
-    geom_text(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation - 1, color = "Terrain", label = cross_section )) 
+    scale_color_manual(values = c("Terrain" = "black", 
+                                "31 Dec 2022" = "#499894",
+                                "Q100 AC" = "#ffae34")) + 
+  theme(legend.position = "none") + 
+  #ggtitle("2D model result") + 
+  xlab("Station (ft from upstream boundary)") + 
+  ylab("Elevation (ft NGVD29)") +
+  theme(legend.position = "none") + #theme(legend.position = "right", legend.title=element_blank()) + 
+  geom_text(data = hwm_dec_2022, aes(x = station_2d, y = thalweg_elevation - 1, color = "Terrain", label = cross_section )) 
 ```
 
     ## Warning: Removed 23 rows containing missing values (`geom_line()`).
@@ -1409,6 +1495,15 @@ ggplot() +
     ## Removed 23 rows containing missing values (`geom_line()`).
 
 ![](tassajara_hydro_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
+
+``` r
+ggsave(file="out/lp_2d_wse_bda.svg", plot=last_plot(), width=9, height=6)
+```
+
+    ## Warning: Removed 23 rows containing missing values (`geom_line()`).
+    ## Removed 23 rows containing missing values (`geom_line()`).
+    ## Removed 23 rows containing missing values (`geom_line()`).
+    ## Removed 23 rows containing missing values (`geom_line()`).
 
 ``` r
 ras_2d_wse %>% 
