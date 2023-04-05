@@ -285,6 +285,8 @@ prism_monthly %>%
   scale_color_viridis_c(direction = -1, option = "cividis") + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position = "none") + 
   geom_text(aes(y = ppt_inches + 1, label = case_when(ppt_inches > 9 ~ paste0(format(date, "%b-%Y"), "\n", ppt_inches), TRUE ~ NA)), size = 2)
+ggsave(file="out/prism_monthly_recent.svg", plot=last_plot(), width=9, height=6)
+
 ```
 
 ```{r}
