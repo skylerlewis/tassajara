@@ -1424,6 +1424,8 @@ ras_2d_wse %>%
 
 
 
+
+
 ```{r}
 # summarize at-a-station hydraulics for 2D results
 
@@ -1517,5 +1519,51 @@ calc_xs(xs_h_afterstorm, filter(hwm_dec_2022, cross_section=="H") %>% pull(water
 ) %>% mutate(xs_area_delta = xs_area_after_storm - xs_area_before_storm)
 ```
 
+```{r}
+calculate_rating_curve <- function(data, slope, mannings_n, delta_y=0.1) {
+  depth_vs_wse <- seq(from=min(data$gse)+delta_y, to=max(data$gse), by=delta_y) %>% 
+    as_tibble() %>%
+    mutate(result = map(value, function(x){calc_xs(data = data, water_elev = x)})) %>% 
+    unnest_wider(col = result) %>%
+    drop_na() %>%
+    mutate(discharge_cfs = 1.486 * cross_sectional_area * 
+             (cross_sectional_area / wetted_perimeter)^(2/3) * slope^(1/2) * mannings_n^(-1)) %>%
+    arrange(discharge_cfs)
+}
+interpolate_rating_curve <- function(data, discharge) {
+  data %>%
+    bind_rows(tribble(~selected_water_level, ~discharge_cfs, TRUE, discharge)) %>%
+    arrange(discharge_cfs) %>%
+    mutate(output_wse = zoo::na.approx(water_surface_elevation)) %>%
+    filter(selected_water_level) %>% 
+    pull(output_wse)
+}
+```
 
+```{r}
+# create a plot of ras 1d rating curves for before vs after storm
+
+ggplot() +
+  geom_line(data = drop_na(ras_1d, cross_section), 
+            aes(y = (w_s_elev_ft - min_ch_el_ft), x = q_total_cfs, color = cross_section, linetype="Spring/Summer 2022")) + 
+  geom_line(data = drop_na(ras_1d_afterstorm, cross_section), 
+            aes(y = (w_s_elev_ft - min_ch_el_ft), x = q_total_cfs, color = cross_section, linetype="Winter 2022-23"))  + 
+  ylab("Depth (ft)") + xlab("Discharge (cfs)") + theme(legend.title=element_blank()) + scale_color_manual(values = c("B" = "#ef6f6a",
+                                "D" = "#ffae34",
+                                "E" = "#55ad89",
+                                "F" = "#c3bc3f",
+                                "G" = "#6388b4",
+                                "H" = "#8cc2ca"
+                                 )) 
+
+ggplot() +
+  geom_line(data = drop_na(ras_1d, cross_section), 
+            aes(y = (w_s_elev_ft), x = q_total_cfs, linetype="Spring/Summer 2022")) + 
+  geom_line(data = drop_na(ras_1d_afterstorm, cross_section), 
+            aes(y = (w_s_elev_ft), x = q_total_cfs, linetype="Winter 2022-23"))  + 
+  ylab("Water Surface Elevation (ft)") + xlab("Discharge (cfs)") + theme(legend.title=element_blank(), legend.position="top") + facet_wrap(~cross_section)
+
+ggsave(file="out/ras_1d_ratingcurves_beforeafter.svg", plot=last_plot(), width=9, height=6)
+
+```
 
