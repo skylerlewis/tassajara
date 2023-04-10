@@ -1,12 +1,18 @@
 ---
 title: "Tassajara Creek H&H Calculations"
 output:
-  github_document: default
+  #pdf_document:
+  #  toc: true
+  #  toc_depth: 2
+  #  number_sections: true
+  #  df_print: kable
+  #  highlight: tango # kate # haddock # pygments
   #html_notebook: default
+  github_document: default
 keep_md: true
 ---
 
-```{r include=FALSE}
+```{r message=FALSE, warning=FALSE}
 library(tidyverse)
 library(lubridate)
 

@@ -3,29 +3,8 @@ Time Series Analysis - Precip and NDVI
 
 ``` r
 library(tidyverse)
-```
-
-    ## ── Attaching packages ─────────────────────────────────────── tidyverse 1.3.2 ──
-    ## ✔ ggplot2 3.4.1     ✔ purrr   1.0.1
-    ## ✔ tibble  3.1.8     ✔ dplyr   1.1.0
-    ## ✔ tidyr   1.3.0     ✔ stringr 1.5.0
-    ## ✔ readr   2.1.4     ✔ forcats 1.0.0
-    ## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
-    ## ✖ dplyr::filter() masks stats::filter()
-    ## ✖ dplyr::lag()    masks stats::lag()
-
-``` r
 library(lubridate)
-```
 
-    ## 
-    ## Attaching package: 'lubridate'
-    ## 
-    ## The following objects are masked from 'package:base':
-    ## 
-    ##     date, intersect, setdiff, union
-
-``` r
 sysfonts::font_add(family = "franklin-gothic", 
                    regular = "./fonts/FRABK.TTF", 
                    italic = "./fonts/FRABKIT.TTF", 
@@ -38,6 +17,11 @@ knitr::opts_chunk$set(fig.width=9, fig.height=6)
 
 # CDEC Precipitation
 
+Testing some functions to extrapolate TAS precip data using nearby MLR
+precip data.
+
+Download and store the raw data from CDEC:
+
 ``` r
 if (!file.exists("data/rawdata_tas.rds")){
   rawdata_tas <- read_csv("https://cdec.water.ca.gov/dynamicapp/req/CSVDataServlet?Stations=TAS&SensorNums=16&dur_code=E&Start=1900-01-01&End=2023-02-16")
@@ -48,6 +32,8 @@ rawdata_mlr <- read_csv("https://cdec.water.ca.gov/dynamicapp/req/CSVDataServlet
 rawdata_mlr %>% saveRDS(file = "data/rawdata_mlr.rds")
 }
 ```
+
+Convert event-based tipping bucket values to daily values:
 
 ``` r
 rawdata_tas <- readRDS(file = "data/rawdata_tas.rds")
@@ -70,8 +56,6 @@ daily_data_tas %>%
   ggplot(aes(y = precip_tas, x = date)) + geom_col()
 ```
 
-    ## Warning: Removed 15 rows containing missing values (`position_stack()`).
-
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
 
 ``` r
@@ -82,14 +66,6 @@ inst_data_mlr <- rawdata_mlr %>%
          date_hour = lubridate::round_date(date_time, unit="hour"),
          value = as.numeric(value),
          increment = case_when(value >= lag(value, n=1) ~ value - lag(value, n=1))) 
-```
-
-    ## Warning: There was 1 warning in `mutate()`.
-    ## ℹ In argument: `value = as.numeric(value)`.
-    ## Caused by warning:
-    ## ! NAs introduced by coercion
-
-``` r
 daily_data_mlr <- inst_data_mlr %>%
   group_by(date) %>%
   summarize(precip_mlr = sum(increment))
@@ -97,18 +73,14 @@ daily_data_mlr <- inst_data_mlr %>%
 daily_data_mlr %>% ggplot(aes(y = precip_mlr, x = date)) + geom_col()
 ```
 
-    ## Warning: Removed 727 rows containing missing values (`position_stack()`).
-
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-3-2.png)<!-- -->
+
+Join and model relationship using power function:
 
 ``` r
 daily_data <- daily_data_mlr %>% 
   left_join(daily_data_tas) 
-```
 
-    ## Joining with `by = join_by(date)`
-
-``` r
 daily_data_filtered <- daily_data %>%
   filter(precip_tas > 0 & precip_mlr > 0) %>% filter(precip_mlr>0.1 & precip_mlr<1)
 
@@ -122,8 +94,6 @@ daily_data_filtered %>%
     scale_x_log10() + 
     geom_smooth(method="lm")
 ```
-
-    ## `geom_smooth()` using formula = 'y ~ x'
 
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
 
@@ -155,18 +125,6 @@ summary(model)
 alpha <- exp(model$coefficients["(Intercept)"])
 beta <- model$coefficients["log(daily_data_filtered$precip_mlr)"]
 
-# daily_data_pred <- daily_data %>% 
-#   mutate(precip_tas_pred = case_when(
-#     !is.na(precip_mlr) ~ alpha * precip_mlr^beta, 
-#     TRUE ~ 0
-#     ))
-
-# daily_data_pred <- daily_data %>% 
-#   mutate(precip_tas_pred = case_when(
-#     is.na(precip_tas) ~ alpha * precip_mlr^beta, 
-#     TRUE ~ precip_tas
-#     ))
-
 daily_data_pred <- daily_data %>% 
   mutate(precip_tas_pred = replace_na(case_when(date < min(daily_data_tas$date) ~ alpha * precip_mlr^beta, TRUE ~ precip_tas),0))
 
@@ -179,21 +137,13 @@ daily_data_pred %>%
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
 
-    ## Warning: Removed 12 rows containing non-finite values (`stat_align()`).
-
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-4-2.png)<!-- -->
-
-``` r
-ggsave("barchart.svg")
-```
-
-    ## Saving 9 x 6 in image
-
-    ## Warning: Removed 12 rows containing non-finite values (`stat_align()`).
 
 ``` r
 daily_data_pred %>% write_csv("data/daily_data_pred.csv")
 ```
+
+Plot the maximum DAILY (calendar day) precipitation by year:
 
 ``` r
 daily_data_pred %>% 
@@ -214,6 +164,7 @@ daily_data_pred %>%
 ```
 
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+Plot the total annual precipitation by year:
 
 ``` r
 daily_data_pred %>% 
@@ -234,6 +185,8 @@ daily_data_pred %>%
 
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
 
+Plot the maximum 24-HOUR (rolling window) precipitation by year:
+
 ``` r
 # IMPROVED VERSION USING ROLLING 24H WINDOW RATHER THAN CALENDAR 24H DAY -- IN PROGRESS
 hourly_tas <- inst_data_tas %>%
@@ -249,11 +202,7 @@ hourly_mlr <- inst_data_mlr %>%
   mutate(precip_mlr_24h = zoo::rollapplyr(precip_mlr, 24, sum, partial=T)) 
 
 hourly <- hourly_mlr %>% left_join(hourly_tas) 
-```
 
-    ## Joining with `by = join_by(date_hour)`
-
-``` r
 hourly_filtered <- hourly %>% 
   select(precip_tas_24h, precip_mlr_24h) %>%
   filter(precip_tas_24h > 0, precip_mlr_24h > 0)
@@ -287,8 +236,6 @@ beta <- model$coefficients["log(hourly_filtered$precip_mlr_24h)"]
 hourly_filtered %>% ggplot(aes(y = precip_tas_24h, x = precip_mlr_24h)) + geom_point() + 
   scale_x_log10() + scale_y_log10() + geom_smooth(method=lm)
 ```
-
-    ## `geom_smooth()` using formula = 'y ~ x'
 
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
@@ -330,11 +277,7 @@ hourly_mlr <- inst_data_mlr %>%
   mutate(precip_mlr_24h = zoo::rollapplyr(precip_mlr, 24, sum, partial=T)) 
 
 hourly <- hourly_mlr %>% left_join(hourly_tas) 
-```
 
-    ## Joining with `by = join_by(date_hour)`
-
-``` r
 hourly_filtered <- hourly %>% 
   select(precip_tas_24h, precip_mlr_24h) %>%
   filter(precip_tas_24h > 0, precip_mlr_24h > 0)
@@ -369,8 +312,6 @@ hourly_filtered %>% ggplot(aes(y = precip_tas_24h, x = precip_mlr_24h)) + geom_p
   scale_x_log10() + scale_y_log10() + geom_smooth(method=lm)
 ```
 
-    ## `geom_smooth()` using formula = 'y ~ x'
-
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
 ``` r
@@ -398,6 +339,8 @@ rolling24h_pred %>%
 
 # PRISM Precipitation
 
+Read PRISM long term time series data:
+
 ``` r
 # PRISM long term time series for a single location
 # retrieved from https://prism.oregonstate.edu/explorer/ for 37.7083, -121.8750
@@ -408,14 +351,7 @@ prism_monthly <- read_csv("data/PRISM_ppt_tmin_tmean_tmax_tdmean_vpdmin_vpdmax_p
          water_year = case_when(month(date) >= 10 ~ year(date) + 1, TRUE ~ year(date)))
 ```
 
-    ## Rows: 1538 Columns: 8
-    ## ── Column specification ────────────────────────────────────────────────────────
-    ## Delimiter: ","
-    ## chr (1): Date
-    ## dbl (7): ppt (inches), tmin (degrees F), tmean (degrees F), tmax (degrees F)...
-    ## 
-    ## ℹ Use `spec()` to retrieve the full column specification for this data.
-    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+Plot monthly data and label the wettest months:
 
 ``` r
 prism_monthly %>% 
@@ -432,11 +368,13 @@ prism_monthly %>%
   geom_text(aes(y = ppt_inches + 1, label = case_when(ppt_inches > 9 ~ paste0(format(date, "%b-%Y"), "\n", ppt_inches), TRUE ~ NA)), size = 2)
 ```
 
-    ## Warning: Removed 1 rows containing missing values (`geom_col()`).
-
-    ## Warning: Removed 313 rows containing missing values (`geom_text()`).
-
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+
+``` r
+ggsave(file="out/prism_monthly_recent.svg", plot=last_plot(), width=9, height=6)
+```
+
+Monthly data for 2017+
 
 ``` r
 prism_monthly %>% 
@@ -452,9 +390,9 @@ prism_monthly %>%
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position = "none")
 ```
 
-    ## Warning: Removed 1 rows containing missing values (`geom_col()`).
-
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+
+Annual long term precip history since pre-1900:
 
 ``` r
 prism_yearly <- prism_monthly %>% 
@@ -472,27 +410,27 @@ print(ppt_quantiles)
 
 ``` r
 prism_yearly_top <- prism_yearly %>% arrange(-ppt_inches) %>% top_n(4)
-```
 
-    ## Selecting by ppt_inches
-
-``` r
 prism_yearly %>% 
   mutate(ppt_quantile = cut_number(ppt_inches, n = 4)) %>%
   ggplot(aes(y = ppt_inches, x = water_year, fill = ppt_quantile)) + 
     geom_col(width = 1) +
     geom_text(aes(label = case_when(water_year %in% prism_yearly_top$water_year ~ paste(water_year, ppt_inches, sep = "\n"), TRUE ~ NA)), vjust=-0.25) +
     #scale_fill_brewer()
-    scale_fill_viridis_d(direction = -1, option = "viridis", name = "Quartile of anual precip.") +
+    scale_fill_viridis_d(direction = -1, option = "viridis", name = "Quartile of annual precip.") +
     scale_x_continuous(name ="Water Year", breaks = seq(1890, 2020, by = 10), expand = c(0,0)) +
     scale_y_continuous(name = "Annual total precipitation (inches)", expand = c(0, 0), limits = c(0, 50)) +
     #ggtitle("PRISM historical precipitation for Lower Tassajara Creek")  + 
   theme(legend.position = "top")
 ```
 
-    ## Warning: Removed 125 rows containing missing values (`geom_text()`).
-
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
+
+``` r
+ggsave(file="out/prism_annual.svg", plot=last_plot(), width=9, height=6)
+```
+
+Summary of annual monthly precip and temperature:
 
 ``` r
 coeff <- 30
@@ -523,22 +461,18 @@ prism_monthly  %>%
 
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
+``` r
+ggsave(file="out/prism_climate.svg", plot=last_plot(), width=9, height=6)
+```
+
 # Landsat NDVI
+
+Import NDVI time series calculated in accompanying Google Earth Engine
+python notebook:
 
 ``` r
 ndvi_time_series <- read_csv("data/ndvi_time_series.csv")
-```
 
-    ## New names:
-    ## Rows: 453 Columns: 3
-    ## ── Column specification
-    ## ──────────────────────────────────────────────────────── Delimiter: "," dbl
-    ## (2): ...1, ndvi dttm (1): time
-    ## ℹ Use `spec()` to retrieve the full column specification for this data. ℹ
-    ## Specify the column types or set `show_col_types = FALSE` to quiet this message.
-    ## • `` -> `...1`
-
-``` r
 ndvi_time_series_interp <- ndvi_time_series %>%
   mutate(date_round = as.Date(lubridate::round_date(time, unit = "day"))) %>%
   complete(date_round = seq.Date(from = min(date_round), to = max(date_round), by = "day")) %>%
@@ -546,39 +480,49 @@ ndvi_time_series_interp <- ndvi_time_series %>%
   mutate(rolling_ndvi = zoo::rollapply(ndvi, 365, mean, align='center', fill=NA))
 ```
 
+Plot time series including 1-year rolling average:
+
 ``` r
 ggplot() + 
-geom_line(data = ndvi_time_series_interp, aes(y = ndvi, x = time), color="darkolivegreen2") +
-geom_line(data = ndvi_time_series_interp, aes(y = rolling_ndvi, x = time), color="seagreen") +
-scale_y_continuous(name = "NDVI",)
+geom_line(data = ndvi_time_series_interp, aes(y = ndvi, x = time), color="#a9b5ae", size=.25) +
+geom_line(data = ndvi_time_series_interp, aes(y = rolling_ndvi, x = time), color="black", size=1) +
+scale_y_continuous(name = "NDVI") + xlab("")
 ```
-
-    ## Warning: Removed 13676 rows containing missing values (`geom_line()`).
-
-    ## Warning: Removed 13689 rows containing missing values (`geom_line()`).
 
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
 
 ``` r
-ggplot() + 
-geom_line(data = ndvi_time_series_interp, aes(y = ndvi, x = time), color="gray", size=.25) +
-geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(2, 3, 4)),   aes(y = ndvi, x = time), color="blue", size = 1) +
-geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(5, 6, 7)),   aes(y = ndvi, x = time), color="gray", size = 1) +
-geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(8, 9, 10)),  aes(y = ndvi, x = time), color="red",  size = 1) +
-geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(11, 12, 1)), aes(y = ndvi, x = time), color="gray", size = 1) +
-geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c()),   aes(y = ndvi, x = time), color="gray", size = 1) +
-geom_line(data = ndvi_time_series_interp, aes(y = rolling_ndvi, x = time), color="black", size = 1) +
-scale_y_continuous(name = "NDVI",) + ggtitle("Landsat NDVI Time Series 1989-2023")
+ggsave(file="out/ts_ndvi.svg", plot=last_plot(), width=9, height=6)
 ```
 
-    ## Warning: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
-    ## ℹ Please use `linewidth` instead.
+Now highlight the late spring observations (corresponding to peak annual
+grasses) and the late fall (when annual grasses are most senescent so
+woody vegetation is highlighted):
 
-    ## Warning: Removed 13676 rows containing missing values (`geom_line()`).
-
-    ## Warning: Removed 13689 rows containing missing values (`geom_line()`).
+``` r
+ggplot() + 
+geom_line(data = ndvi_time_series_interp, aes(y = ndvi, x = time), color="#a9b5ae", size=.25) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(2, 3, 4)),   aes(y = ndvi, x = time, color = "1"), size = 1.5) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(5, 6, 7)),   aes(y = ndvi, x = time, color = "2"), size = 1.5) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(8, 9, 10)),  aes(y = ndvi, x = time, color = "3"), size = 1.5) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c(11, 12, 1)), aes(y = ndvi, x = time, color = "4"), size = 1.5) +
+geom_point(data = ndvi_time_series_interp %>% filter(month(time) %in% c()),   aes(y = ndvi, x = time), color="#a9b5ae",        size = 1.5) +
+geom_line(data = ndvi_time_series_interp, aes(y = rolling_ndvi, x = time), color="black", size = 1) +
+scale_y_continuous(name = "NDVI") + xlab("")+ 
+scale_color_manual(values = c("1"="#ffae34", "2"="#a9b5ae", "3"="#55ad89", "4"="#a9b5ae"),
+                  labels = c("1"="Feb/Mar/Apr", "2"="May/Jun/Jul", "3"="Aug/Sep/Oct", "4"="Nov/Dec/Jan"), name = "") +
+theme(legend.position = "top")
+```
 
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+
+``` r
+ggsave(file="out/ts_ndvi_points.svg", plot=last_plot(), width=9, height=6)
+
+#+ ggtitle("Landsat NDVI Time Series 1989-2023")
+```
+
+Summarize the monthl mean NDVI before and after restoration:
 
 ``` r
 ndvi_time_series_interp %>% 
@@ -593,13 +537,21 @@ ndvi_time_series_interp %>%
   mutate(se_ndvi = sd_ndvi / sqrt(n_ndvi)) %>%
   ggplot(aes(x = time_month, fill = after_restoration)) + 
   geom_col(aes(y = mean_ndvi), position = "dodge") +
-  scale_y_continuous(expand = c(0, 0))  + ggtitle("Landsat average NDVI by month, 1989-1999 vs 2000-2023")
+  scale_y_continuous(expand = c(0, 0))  + 
+  #ggtitle("Landsat average NDVI by month, 1989-1999 vs 2000-2023") +
+  ylab("Mean NDVI") + xlab("") +
+  scale_fill_manual(values = c("FALSE" = "#c3bc3f", "TRUE" = "#6388b4"), labels = c("FALSE" = "1989-1999", "TRUE" = "2000-2023"), name = "") +
+  theme(legend.position = "top")
 ```
 
-    ## `summarise()` has grouped output by 'time_month'. You can override using the
-    ## `.groups` argument.
-
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
+
+``` r
+ggsave(file="out/ts_ndvi_months.svg", plot=last_plot(), width=9, height=6)
+```
+
+Fit a trend (change in NDVI over time) for each month, before and after
+restoration:
 
 ``` r
 ndvi_time_series_interp %>% 
@@ -621,14 +573,22 @@ ndvi_time_series_interp %>%
   ggplot(aes(y = time_month, color = after_restoration)) + 
   geom_point(aes(x = model_slope)) +
   geom_errorbarh(aes(xmin = model_slope - 1.96*model_se, xmax = model_slope + 1.96*model_se)) + 
-  geom_vline(xintercept = 0) + scale_y_discrete(limits = rev) + ggtitle("Landsat change in NDVI per year by month, 1989-1999 vs 2000-2023")
+  geom_vline(xintercept = 0) + scale_y_discrete(limits = rev) + 
+  #ggtitle("Landsat change in NDVI per year by month, 1989-1999 vs 2000-2023") + 
+  xlab("Average change in NDVI per year") + ylab("") +
+  scale_color_manual(values = c("FALSE" = "#c3bc3f", "TRUE" = "#6388b4"), labels = c("FALSE" = "1989-1999", "TRUE" = "2000-2023"), name = "") +
+  theme(legend.position = "top")
 ```
 
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
 
 ``` r
+ggsave(file="out/ts_ndvi_trend.svg", plot=last_plot(), width=9, height=6)
+
 #https://www.statology.org/extract-coefficients-from-lm-in-r/
 ```
+
+Summarize mean NDVI by water year:
 
 ``` r
 print(mean(filter(ndvi_time_series_interp, time < ymd("2000-01-01"))$ndvi))
@@ -663,9 +623,8 @@ ndvi_time_series_interp %>%
   ggplot(aes(y = mean_ndvi, x= water_year)) + geom_col()
 ```
 
-    ## Warning: Removed 1 rows containing missing values (`position_stack()`).
-
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
+Plot NDVI against precip data:
 
 ``` r
 maxRange <- 10
@@ -682,34 +641,9 @@ scale_y_continuous(name = "precipitation",
                                      name = "NDVI"))
 ```
 
-    ## Warning: Removed 13676 rows containing missing values (`geom_line()`).
-
-    ## Warning: Removed 13689 rows containing missing values (`geom_line()`).
-
 ![](tassajara_precip_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
 
-``` r
-#ndvi_time_series %>% 
-#  mutate(time_month = month(time)) %>%
-#  ggplot(aes(x = time, y = ndvi, color = as.factor(time_month), fill = as.factor(time_month))) + geom_smooth(se=F)
-#
-#ndvi_time_series %>% 
-#  mutate(time_month = month(time),
-#         season = factor(case_when(
-#           #time_month %in% c(4, 5, 6) ~ "Spring",
-#           #time_month %in% c(8, 9, 10) ~ "Summer",
-#           #time_month %in% c(12, 1, 2) ~ "Rainy"
-#           time_month %in% c(3, 4) ~ "Mar - Apr",
-#           time_month %in% c(5, 6, 7) ~ "May - Jul",
-#           time_month %in% c(8, 9, 10) ~ "Aug - Oct",
-#           time_month %in% c(11, 12, 1, 2) ~ "Nov - Feb",
-#         ), levels = c("Mar - Apr", "May - Jul", "Aug - Oct", "Nov - Feb"))) %>%
-#  ggplot(aes(x = time, y = ndvi, color = season, fill = season)) + 
-#    geom_point(size = 1) + 
-#    geom_smooth(method = "loess", span = .5, se = T) + # geom_smooth(method = "gam") #geom_text(aes(label = time_month)) 
-#    theme(legend.position = "top") #+ 
-#    #scale_color_manual(values=colors) + scale_fill_manual(values=colors)
-```
+Fit trends for each season:
 
 ``` r
 colors <- c("cadetblue", "lightgreen", "orange")
@@ -730,11 +664,12 @@ ndvi_time_series %>%
     scale_color_manual(values=colors) + scale_fill_manual(values=colors)
 ```
 
-    ## `geom_smooth()` using formula = 'y ~ x'
-
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
 
 # crosstab of NDVI and relative elevation
+
+Testing this but no clear signal. Trying to find if NDVI changes vary
+significantly by floodplain elevation:
 
 ``` r
 aoi <- sf::st_read("data/tassajara_perim_50ft.kml") %>% 
@@ -763,7 +698,7 @@ rem <- terra::rast("data/raster/lidar2021_REM.tif") %>%
 terra::plot(rem)
 ```
 
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
 
 ``` r
 # categorical crosstab
@@ -834,14 +769,10 @@ rem_zones <- rem %>% terra::classify(c(0, 4, 8, 12))
 naip_scale %>% terra::boxplot(rem_zones)
 ```
 
-    ## Warning: [boxplot] taking a regular sample of 1e+05 cells
-
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-23-2.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-22-2.png)<!-- -->
 
 ``` r
 naip_offset %>% terra::boxplot(rem_zones)
 ```
 
-    ## Warning: [boxplot] taking a regular sample of 1e+05 cells
-
-![](tassajara_precip_files/figure-gfm/unnamed-chunk-23-3.png)<!-- -->
+![](tassajara_precip_files/figure-gfm/unnamed-chunk-22-3.png)<!-- -->

@@ -6,10 +6,9 @@ output:
 keep_md: true
 ---
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(tidyverse)
 library(lubridate)
-
 
 sysfonts::font_add(family = "franklin-gothic", 
                    regular = "./fonts/FRABK.TTF", 
@@ -24,7 +23,11 @@ knitr::opts_chunk$set(fig.width=9, fig.height=6)
 
 # CDEC Precipitation
 
-```{r}
+Testing some functions to extrapolate TAS precip data using nearby MLR precip data.
+
+Download and store the raw data from CDEC:
+
+```{r message=FALSE, warning=FALSE}
 
 if (!file.exists("data/rawdata_tas.rds")){
   rawdata_tas <- read_csv("https://cdec.water.ca.gov/dynamicapp/req/CSVDataServlet?Stations=TAS&SensorNums=16&dur_code=E&Start=1900-01-01&End=2023-02-16")
@@ -36,7 +39,9 @@ rawdata_mlr %>% saveRDS(file = "data/rawdata_mlr.rds")
 }
 ```
 
-```{r}
+Convert event-based tipping bucket values to daily values:
+
+```{r message=FALSE, warning=FALSE}
 rawdata_tas <- readRDS(file = "data/rawdata_tas.rds")
 rawdata_mlr <- readRDS(file = "data/rawdata_mlr.rds")
 
@@ -70,7 +75,9 @@ daily_data_mlr <- inst_data_mlr %>%
 daily_data_mlr %>% ggplot(aes(y = precip_mlr, x = date)) + geom_col()
 ```
 
-```{r}
+Join and model relationship using power function:
+
+```{r message=FALSE, warning=FALSE}
 
 daily_data <- daily_data_mlr %>% 
   left_join(daily_data_tas) 
@@ -93,18 +100,6 @@ summary(model)
 alpha <- exp(model$coefficients["(Intercept)"])
 beta <- model$coefficients["log(daily_data_filtered$precip_mlr)"]
 
-# daily_data_pred <- daily_data %>% 
-#   mutate(precip_tas_pred = case_when(
-#     !is.na(precip_mlr) ~ alpha * precip_mlr^beta, 
-#     TRUE ~ 0
-#     ))
-
-# daily_data_pred <- daily_data %>% 
-#   mutate(precip_tas_pred = case_when(
-#     is.na(precip_tas) ~ alpha * precip_mlr^beta, 
-#     TRUE ~ precip_tas
-#     ))
-
 daily_data_pred <- daily_data %>% 
   mutate(precip_tas_pred = replace_na(case_when(date < min(daily_data_tas$date) ~ alpha * precip_mlr^beta, TRUE ~ precip_tas),0))
 
@@ -116,13 +111,13 @@ daily_data_pred %>%
     #scale_fill_viridis_c(direction = -1) + 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-#ggsave("barchart.svg")
-
 daily_data_pred %>% write_csv("data/daily_data_pred.csv")
 
 ```
 
-```{r}
+Plot the maximum DAILY (calendar day) precipitation by year:
+
+```{r message=FALSE, warning=FALSE}
 daily_data_pred %>% 
   mutate(#cal_year = year(date),
          water_year = case_when(month(date) >= 10 ~ year(date) + 1, TRUE ~ year(date))) %>% 
@@ -140,7 +135,9 @@ daily_data_pred %>%
   theme(legend.position = "none")
 
 ```
-```{r}
+Plot the total annual precipitation by year:
+
+```{r message=FALSE, warning=FALSE}
 
 daily_data_pred %>% 
   mutate(#cal_year = year(date),
@@ -158,7 +155,10 @@ daily_data_pred %>%
   theme(legend.position = "none")
 
 ```
-```{r}
+
+Plot the maximum 24-HOUR (rolling window) precipitation by year:
+
+```{r message=FALSE, warning=FALSE}
 # IMPROVED VERSION USING ROLLING 24H WINDOW RATHER THAN CALENDAR 24H DAY -- IN PROGRESS
 hourly_tas <- inst_data_tas %>%
   group_by(date_hour) %>%
@@ -204,12 +204,10 @@ rolling24h_pred %>%
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
   theme(legend.position = "none")
 
-
-
     
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 # IMPROVED VERSION USING ROLLING 24H WINDOW RATHER THAN CALENDAR 24H DAY -- IN PROGRESS
 hourly_tas <- inst_data_tas %>%
   group_by(date_hour) %>%
@@ -262,7 +260,9 @@ rolling24h_pred %>%
 
 # PRISM Precipitation
 
-```{r}
+Read PRISM long term time series data:
+
+```{r message=FALSE, warning=FALSE}
 # PRISM long term time series for a single location
 # retrieved from https://prism.oregonstate.edu/explorer/ for 37.7083, -121.8750
 
@@ -272,7 +272,10 @@ prism_monthly <- read_csv("data/PRISM_ppt_tmin_tmean_tmax_tdmean_vpdmin_vpdmax_p
          water_year = case_when(month(date) >= 10 ~ year(date) + 1, TRUE ~ year(date)))
 
 ```
-```{r}
+
+Plot monthly data and label the wettest months:
+
+```{r message=FALSE, warning=FALSE}
 prism_monthly %>% 
   filter(water_year>=1997) %>%
   ggplot(aes(y = ppt_inches, x = as.POSIXct(date %m+% months(3)), fill = ppt_inches, color = ppt_inches)) + 
@@ -288,8 +291,9 @@ prism_monthly %>%
 ggsave(file="out/prism_monthly_recent.svg", plot=last_plot(), width=9, height=6)
 
 ```
+Monthly data for 2017+
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 prism_monthly %>% 
   filter(water_year>=2017) %>%
   ggplot(aes(y = ppt_inches, x = as.POSIXct(date %m+% months(3)))) + #fill = ppt_inches, color = ppt_inches)) + 
@@ -303,8 +307,8 @@ prism_monthly %>%
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position = "none")
 ```
 
-
-```{r}
+Annual long term precip history since pre-1900:
+```{r message=FALSE, warning=FALSE}
 
 prism_yearly <- prism_monthly %>% 
   group_by(water_year) %>% 
@@ -332,8 +336,9 @@ prism_yearly %>%
 ggsave(file="out/prism_annual.svg", plot=last_plot(), width=9, height=6)
 
 ``` 
+Summary of annual monthly precip and temperature: 
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 coeff <- 30
 prism_monthly  %>% 
   mutate(time_month = fct_recode(as.factor(month(date)), 
@@ -365,7 +370,9 @@ ggsave(file="out/prism_climate.svg", plot=last_plot(), width=9, height=6)
 
 # Landsat NDVI
 
-```{r}
+Import NDVI time series calculated in accompanying Google Earth Engine python notebook:
+
+```{r message=FALSE, warning=FALSE}
 ndvi_time_series <- read_csv("data/ndvi_time_series.csv")
 
 ndvi_time_series_interp <- ndvi_time_series %>%
@@ -376,7 +383,9 @@ ndvi_time_series_interp <- ndvi_time_series %>%
 
 ```
 
-```{r}
+Plot time series including 1-year rolling average:
+
+```{r message=FALSE, warning=FALSE}
 
 ggplot() + 
 geom_line(data = ndvi_time_series_interp, aes(y = ndvi, x = time), color="#a9b5ae", size=.25) +
@@ -385,8 +394,8 @@ scale_y_continuous(name = "NDVI") + xlab("")
 ggsave(file="out/ts_ndvi.svg", plot=last_plot(), width=9, height=6)
 
 ```
-
-```{r}
+Now highlight the late spring observations (corresponding to peak annual grasses) and the late fall (when annual grasses are most senescent so woody vegetation is highlighted):
+```{r message=FALSE, warning=FALSE}
 
 ggplot() + 
 geom_line(data = ndvi_time_series_interp, aes(y = ndvi, x = time), color="#a9b5ae", size=.25) +
@@ -405,8 +414,9 @@ ggsave(file="out/ts_ndvi_points.svg", plot=last_plot(), width=9, height=6)
 #+ ggtitle("Landsat NDVI Time Series 1989-2023")
 
 ```
+Summarize the monthl mean NDVI before and after restoration:
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 ndvi_time_series_interp %>% 
   mutate(time_month = fct_recode(as.factor(month(date_round)), 
                                  "Jan" = "1", "Feb" = "2" , "Mar" = "3", 
@@ -429,8 +439,8 @@ ggsave(file="out/ts_ndvi_months.svg", plot=last_plot(), width=9, height=6)
 
 
 ```
-
-```{r}
+Fit a trend (change in NDVI over time) for each month, before and after restoration: 
+```{r message=FALSE, warning=FALSE}
 ndvi_time_series_interp %>% 
   mutate(time_month = fct_recode(as.factor(month(date_round)), 
                                  "Jan" = "1", "Feb" = "2" , "Mar" = "3", 
@@ -460,9 +470,8 @@ ggsave(file="out/ts_ndvi_trend.svg", plot=last_plot(), width=9, height=6)
 #https://www.statology.org/extract-coefficients-from-lm-in-r/
 ```
 
-
-
-```{r}
+Summarize mean NDVI by water year: 
+```{r message=FALSE, warning=FALSE}
 print(mean(filter(ndvi_time_series_interp, time < ymd("2000-01-01"))$ndvi))
 print(mean(filter(ndvi_time_series_interp, year(time) == "2000")$ndvi))
 print(mean(filter(ndvi_time_series_interp, year(time) == "2022")$ndvi))
@@ -475,8 +484,8 @@ ndvi_time_series_interp %>%
   group_by(water_year) %>% summarize(mean_ndvi = mean(ndvi)) %>% 
   ggplot(aes(y = mean_ndvi, x= water_year)) + geom_col()
 ```
-
-```{r}
+Plot NDVI against precip data:
+```{r message=FALSE, warning=FALSE}
 maxRange <- 10
 coeff <- 1 / maxRange
 
@@ -492,31 +501,8 @@ scale_y_continuous(name = "precipitation",
 
 ```
 
-```{r}
-#ndvi_time_series %>% 
-#  mutate(time_month = month(time)) %>%
-#  ggplot(aes(x = time, y = ndvi, color = as.factor(time_month), fill = as.factor(time_month))) + geom_smooth(se=F)
-#
-#ndvi_time_series %>% 
-#  mutate(time_month = month(time),
-#         season = factor(case_when(
-#           #time_month %in% c(4, 5, 6) ~ "Spring",
-#           #time_month %in% c(8, 9, 10) ~ "Summer",
-#           #time_month %in% c(12, 1, 2) ~ "Rainy"
-#           time_month %in% c(3, 4) ~ "Mar - Apr",
-#           time_month %in% c(5, 6, 7) ~ "May - Jul",
-#           time_month %in% c(8, 9, 10) ~ "Aug - Oct",
-#           time_month %in% c(11, 12, 1, 2) ~ "Nov - Feb",
-#         ), levels = c("Mar - Apr", "May - Jul", "Aug - Oct", "Nov - Feb"))) %>%
-#  ggplot(aes(x = time, y = ndvi, color = season, fill = season)) + 
-#    geom_point(size = 1) + 
-#    geom_smooth(method = "loess", span = .5, se = T) + # geom_smooth(method = "gam") #geom_text(aes(label = time_month)) 
-#    theme(legend.position = "top") #+ 
-#    #scale_color_manual(values=colors) + scale_fill_manual(values=colors)
-
-```
-
-```{r}
+Fit trends for each season:  
+```{r message=FALSE, warning=FALSE}
 colors <- c("cadetblue", "lightgreen", "orange")
 ndvi_time_series %>% 
   mutate(time_month = month(time),
@@ -536,7 +522,10 @@ ndvi_time_series %>%
 ```
 
 # crosstab of NDVI and relative elevation
-```{r}
+
+Testing this but no clear signal. Trying to find if NDVI changes vary significantly by floodplain elevation:
+
+```{r message=FALSE, warning=FALSE}
 aoi <- sf::st_read("data/tassajara_perim_50ft.kml") %>% 
   terra::vect() # convert from sf into terra vector
 

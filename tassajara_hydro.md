@@ -1,6 +1,20 @@
 Tassajara Creek H&H Calculations
 ================
 
+``` r
+library(tidyverse)
+library(lubridate)
+
+sysfonts::font_add(family = "franklin-gothic", 
+                   regular = "./fonts/FRABK.TTF", 
+                   italic = "./fonts/FRABKIT.TTF", 
+                   bold = "./fonts/FRADM.TTF",
+                   bolditalic = "./fonts/FRADMIT.TTF")
+showtext::showtext_auto()
+ggplot2::theme_set(theme_classic() + theme(text = element_text(family = 'franklin-gothic')))
+knitr::opts_chunk$set(fig.width=9, fig.height=6) 
+```
+
 # Flow Hydrographs
 
 Import Winter 2022-23 storm flow data from [Tassajara Creek below
